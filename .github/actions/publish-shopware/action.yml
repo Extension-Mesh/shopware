@@ -13,6 +13,20 @@ runs:
         extensions: json, zip
         coverage: none
 
+    - name: Install Shopware CLI
+      uses: FriendsOfShopware/shopware-cli-action@b67b48ccb52beb8533ea276152e1f89f29bbd080 # v3
+      with:
+        version: latest
+
+    - name: Build and validate extension ZIP
+      shell: bash
+      run: |
+        shopware-cli extension zip --git-commit "$GITHUB_SHA" . --release
+        source_archive="$GITHUB_WORKSPACE/ExtensionMesh-$GITHUB_SHA.zip"
+        test -f "$source_archive"
+        shopware-cli extension validate "$source_archive"
+        echo "EXTENSION_MESH_SOURCE_ARCHIVE=$source_archive" >> "$GITHUB_ENV"
+
     - name: Build release files
       id: build
       shell: bash

@@ -88,7 +88,8 @@ configuration and scripts, and verifies the generated release archive.
 The top-level `version` in `composer.json` is the release source of truth.
 Changing it on `main`, for example to `0.1.0-alpha.1`, starts the complete
 release verification. The workflow repeats the baseline checks and runs the
-Dockware integration suite. After both jobs succeed, it creates the matching
+Dockware integration suite. The installable archive is built and validated with
+Shopware CLI. After both jobs succeed, the workflow creates the matching
 `v0.1.0-alpha.1` tag and publishes the release. Changes to other Composer
 metadata do not publish a release while the version remains unchanged.
 

@@ -266,36 +266,47 @@ if (!is_dir($outputDirectory) && !mkdir($outputDirectory, 0777, true) && !is_dir
 
 $archiveName = $technicalName . '-' . $version . '.zip';
 $archivePath = $outputDirectory . '/' . $archiveName;
+$sourceArchiveOverride = getenv('EXTENSION_MESH_SOURCE_ARCHIVE');
 
-$pathSpecs = [
-    '.',
-    ':(exclude).github',
-    ':(exclude)docker',
-    ':(exclude)docs',
-    ':(exclude)tests',
-    ':(exclude)node_modules',
-    ':(exclude).gitignore',
-    ':(exclude).gitattributes',
-    ':(exclude)compose.yaml',
-    ':(exclude)docker-compose.yml',
-    ':(exclude)docker-compose.yaml',
-    ':(exclude)Makefile',
-    ':(exclude)phpunit.xml',
-    ':(exclude)phpunit.xml.dist',
-    ':(exclude)phpstan.neon',
-    ':(exclude)phpstan.neon.dist',
-];
+if (is_string($sourceArchiveOverride) && $sourceArchiveOverride !== '') {
+    $sourceArchive = realpath($sourceArchiveOverride);
+    if ($sourceArchive === false || !is_file($sourceArchive)) {
+        fail('the Shopware CLI source archive could not be found.');
+    }
+    if (!copy($sourceArchive, $archivePath)) {
+        fail('the Shopware CLI source archive could not be copied.');
+    }
+} else {
+    $pathSpecs = [
+        '.',
+        ':(exclude).github',
+        ':(exclude)docker',
+        ':(exclude)docs',
+        ':(exclude)tests',
+        ':(exclude)node_modules',
+        ':(exclude).gitignore',
+        ':(exclude).gitattributes',
+        ':(exclude)compose.yaml',
+        ':(exclude)docker-compose.yml',
+        ':(exclude)docker-compose.yaml',
+        ':(exclude)Makefile',
+        ':(exclude)phpunit.xml',
+        ':(exclude)phpunit.xml.dist',
+        ':(exclude)phpstan.neon',
+        ':(exclude)phpstan.neon.dist',
+    ];
 
-$archiveCommand = sprintf(
-    'git -C %s archive --format=zip --prefix=%s/ --output=%s HEAD -- %s',
-    escapeshellarg($repositoryRoot),
-    escapeshellarg($technicalName),
-    escapeshellarg($archivePath),
-    implode(' ', array_map('escapeshellarg', $pathSpecs))
-);
-exec($archiveCommand, $archiveOutput, $archiveExitCode);
-if ($archiveExitCode !== 0 || !is_file($archivePath)) {
-    fail('git archive could not create the plugin ZIP.');
+    $archiveCommand = sprintf(
+        'git -C %s archive --format=zip --prefix=%s/ --output=%s HEAD -- %s',
+        escapeshellarg($repositoryRoot),
+        escapeshellarg($technicalName),
+        escapeshellarg($archivePath),
+        implode(' ', array_map('escapeshellarg', $pathSpecs))
+    );
+    exec($archiveCommand, $archiveOutput, $archiveExitCode);
+    if ($archiveExitCode !== 0 || !is_file($archivePath)) {
+        fail('git archive could not create the plugin ZIP.');
+    }
 }
 
 $archive = new ZipArchive();

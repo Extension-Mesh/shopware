@@ -28,7 +28,7 @@ jobs:
   verify-release:
     if: github.event_name != 'workflow_call'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -53,6 +53,11 @@ jobs:
           extensions: json, sodium, zip
           coverage: none
 
+      - name: Install Shopware CLI
+        uses: FriendsOfShopware/shopware-cli-action@b67b48ccb52beb8533ea276152e1f89f29bbd080 # v3
+        with:
+          version: latest
+
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist
 
@@ -70,6 +75,14 @@ jobs:
           sh -n docker/registry/build-fixture.sh docker/wait-for-dockware.sh \
             docker/test-interactions.sh docker/test-paid-entitlements.sh \
             docker/test-repository-onboarding.sh
+
+      - name: Build and validate extension ZIP
+        run: |
+          shopware-cli extension zip --git-commit "$GITHUB_SHA" . --release
+          source_archive="$GITHUB_WORKSPACE/ExtensionMesh-$GITHUB_SHA.zip"
+          test -f "$source_archive"
+          shopware-cli extension validate "$source_archive"
+          echo "EXTENSION_MESH_SOURCE_ARCHIVE=$source_archive" >> "$GITHUB_ENV"
 
       - name: Validate reproducible release archive
         env:
@@ -146,7 +159,7 @@ jobs:
         run: docker compose down --volumes --remove-orphans
 
   publish-current-repository:
-    if: github.event_name == 'push' && github.ref_name == 'main' && false
+    if: github.event_name == 'push' && github.ref_name == 'main'
     needs:
       - verify-release
       - integration-release
