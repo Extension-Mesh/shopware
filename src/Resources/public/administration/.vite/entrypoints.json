@@ -1,0 +1,25 @@
+{
+  "base": "/bundles/extensionmesh/administration/",
+  "entryPoints": {
+    "extension-mesh": {
+      "css": [
+        "/bundles/extensionmesh/administration/assets/extension-mesh-BEGUYDkc.css"
+      ],
+      "dynamic": [],
+      "js": [
+        "/bundles/extensionmesh/administration/assets/extension-mesh-DFTAkTni.js"
+      ],
+      "legacy": false,
+      "preload": []
+    }
+  },
+  "legacy": false,
+  "metadatas": {},
+  "version": [
+    "7.1.0",
+    7,
+    1,
+    0
+  ],
+  "viteServer": null
+}

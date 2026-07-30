@@ -1,0 +1,19 @@
+{
+  "extensionMesh": {
+    "downloads": {
+      "compatibleWith": "Shopware %constraint%",
+      "latestVersion": "Neueste Version: %version%",
+      "noReleaseNotes": "Für diese Version wurden keine Versionshinweise hinterlegt.",
+      "showOlder": "%count% ältere Version(en) anzeigen"
+    },
+    "account": {
+      "title": "Erweiterungszugang",
+      "explanation": "Verwende diese Daten in ExtensionMesh auf der Shopware-Installation, die deine gekauften Erweiterungen und Updates erhalten soll.",
+      "registryUrl": "Registry-URL",
+      "accessToken": "Zugriffstoken",
+      "secretWarning": "Behandle dieses Token wie ein Passwort. Beim Erneuern wird das vorherige Token sofort ungültig.",
+      "rotate": "Zugriffstoken erneuern",
+      "noEntitlements": "Für dieses Kundenkonto ist keine aktive Berechtigung für ein digitales Produkt vorhanden."
+    }
+  }
+}

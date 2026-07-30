@@ -1,0 +1,67 @@
+name: extension-mesh
+
+services:
+  buyer:
+    image: ${DOCKWARE_IMAGE:-dockware/shopware:6.7.12.1}
+    platform: linux/amd64
+    ports:
+      - "127.0.0.1:${BUYER_HTTP_PORT:-8081}:80"
+      - "127.0.0.1:${BUYER_DB_PORT:-33061}:3306"
+    environment:
+      TZ: Europe/Berlin
+      XDEBUG_ENABLED: "0"
+      EXTENSION_MESH_ALLOW_PRIVATE_NETWORKS: "1"
+    volumes:
+      - ./:/var/www/html/custom/plugins/ExtensionMesh
+      - ./docker/registry/public:/extension-mesh-registry:ro
+      - ./docker/php-fpm-extension-mesh.conf:/etc/php/8.2/fpm/pool.d/zz-extension-mesh.conf:ro
+    tmpfs:
+      - /var/www/html/custom/plugins/ExtensionMesh/vendor
+    networks:
+      - mesh
+    depends_on:
+      registry:
+        condition: service_healthy
+
+  seller:
+    image: ${DOCKWARE_IMAGE:-dockware/shopware:6.7.12.1}
+    platform: linux/amd64
+    ports:
+      - "127.0.0.1:${SELLER_HTTP_PORT:-8082}:80"
+      - "127.0.0.1:${SELLER_DB_PORT:-33062}:3306"
+    environment:
+      TZ: Europe/Berlin
+      XDEBUG_ENABLED: "0"
+      EXTENSION_MESH_ALLOW_PRIVATE_NETWORKS: "1"
+    volumes:
+      - ./:/var/www/html/custom/plugins/ExtensionMesh
+      - ./docker/registry/public:/extension-mesh-registry:ro
+      - ./docker/php-fpm-extension-mesh.conf:/etc/php/8.2/fpm/pool.d/zz-extension-mesh.conf:ro
+    tmpfs:
+      - /var/www/html/custom/plugins/ExtensionMesh/vendor
+    networks:
+      - mesh
+    depends_on:
+      registry:
+        condition: service_healthy
+
+  registry:
+    image: nginx:1.27-alpine
+    ports:
+      - "127.0.0.1:${REGISTRY_HTTP_PORT:-8090}:80"
+    volumes:
+      - ./docker/registry/public:/usr/share/nginx/html:ro
+      - ./docker/registry/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      mesh:
+        aliases:
+          - registry-assets
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/registry.json"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+
+networks:
+  mesh:
+    driver: bridge

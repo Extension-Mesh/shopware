@@ -1,0 +1,98 @@
+{
+  "extension-mesh": {
+    "tabs": {
+      "registries": "Registries",
+      "repositories": "My Repositories"
+    },
+    "registries": {
+      "title": "Extension registries",
+      "explanation": "Add a registry endpoint or paste a public GitHub repository URL. Its extensions appear in this existing list.",
+      "addTitle": "Add registry",
+      "connectedTitle": "Connected registries",
+      "connectedHelp": "Extensions from these sources are merged into the existing Apps listing.",
+      "empty": "No registries are connected yet.",
+      "urlLabel": "Registry or GitHub URL",
+      "urlPlaceholder": "https://github.com/vendor/shopware-plugin",
+      "accessTokenLabel": "Access token (optional)",
+      "accessTokenHelp": "Stored encrypted with this Shopware installation's APP_SECRET and sent only to the registry origin.",
+      "credentialStored": "Access token stored (fingerprint {fingerprint})",
+      "changeAccess": "Change access",
+      "newAccessToken": "Replacement access token",
+      "clearAccessHelp": "Leave empty to switch this registry to anonymous access.",
+      "refresh": "Refresh registries",
+      "unknownError": "The registry request failed."
+    },
+    "publication": {
+      "title": "Seller publication",
+      "explanation": "Valid Shopware plugin ZIPs attached as digital-product downloads are published automatically. Invalid files remain private and are listed here.",
+      "paths": "Registry: {registry} · Customer access: {account}",
+      "rejected": "Download not published",
+      "published": "Published",
+      "versionLabel": "Version",
+      "product": "Product {productId}",
+      "empty": "No digital-product downloads are available for publication yet."
+    },
+    "productDownloads": {
+      "connect": "Connect this product to Extension Mesh",
+      "connectHelp": "Valid plugin ZIP uploads are published to ExtensionMesh. Other digital products keep their standard download handling.",
+      "repositoryManaged": "This product is connected through its seller repository.",
+      "error": "The Extension Mesh downloads could not be updated.",
+      "file": "File",
+      "version": "Version",
+      "shopware": "Shopware compatibility",
+      "status": "Publication",
+      "size": "Size",
+      "createdAt": "Uploaded",
+      "statuses": {
+        "pending": "Processing",
+        "published": "Published",
+        "rejected": "Not published"
+      }
+    },
+    "repositories": {
+      "title": "Seller repositories",
+      "connectTitle": "Connect repository",
+      "tokenCreate": "Create Access Token",
+      "enterpriseToggle": "GitHub Enterprise",
+      "connectedTitle": "Connected repositories",
+      "connectedHelp": "Stable release assets are checked automatically every 15 minutes.",
+      "empty": "No seller repositories are connected yet.",
+      "providerLabel": "Repository provider",
+      "repositoryLabel": "Repository",
+      "repositoryPlaceholder": "owner/extension",
+      "tokenLabel": "Fine-grained access token (optional)",
+      "tokenHelp": "Required only for private repositories. Grant read-only Contents access.",
+      "apiBaseUrlLabel": "Provider API URL",
+      "apiBaseUrlHelp": "GitHub Enterprise API base URL.",
+      "modeLabel": "Onboarding mode",
+      "modeImport": "Create draft product",
+      "modeLink": "Link existing product",
+      "productLabel": "Digital product",
+      "productColumnLabel": "Product",
+      "extensionLabel": "Extension",
+      "statusLabel": "Status",
+      "productPlaceholder": "Select the digital product to link",
+      "importNotice": "Creates an inactive draft product. Set its price and visibility before publishing.",
+      "connect": "Link / import repository",
+      "product": "Linked product {productId}",
+      "credentialStored": "Token stored (fingerprint {fingerprint})",
+      "lastSynced": "Last synchronized: {date}",
+      "processingStatus": {
+        "queued": "Queued",
+        "inspecting": "Inspecting repository",
+        "preparing": "Preparing product",
+        "synchronizing": "Importing releases",
+        "ready": "Ready",
+        "failed": "Failed"
+      },
+      "sync": "Sync now",
+      "retry": "Retry",
+      "changeToken": "Change token",
+      "newToken": "Replacement repository token (optional)",
+      "unlink": "Unlink"
+    },
+    "card": {
+      "source": "Registry: {source}"
+    }
+  }
+}

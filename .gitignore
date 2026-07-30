@@ -1,0 +1,8 @@
+/vendor/
+/.phpunit.cache/
+/.phpstan-cache/
+/.idea/
+/.vscode/
+/.DS_Store
+/docker/registry/public/*
+!/docker/registry/public/.gitkeep

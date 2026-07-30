@@ -1,0 +1,11 @@
+includes:
+    - vendor/shopwarelabs/phpstan-shopware/rules.neon
+
+parameters:
+    level: 8
+    paths:
+        - src
+    tmpDir: .phpstan-cache
+    excludePaths:
+        analyse:
+            - src/Resources/*

@@ -1,0 +1,73 @@
+{% sw_extends '@Storefront/storefront/component/line-item/element/downloads.html.twig' %}
+
+{% block component_line_item_downloads %}
+    {% if lineItem.downloads is defined and lineItem.downloads|length > 0 %}
+        {% set extensionMeshCatalog = extension_mesh_download_catalog(lineItem.downloads) %}
+
+        {% if extensionMeshCatalog.groups is empty %}
+            {{ parent() }}
+        {% else %}
+            <div class="order-detail-content-list">
+                {% for download in extensionMeshCatalog.normal %}
+                    {% if download.accessGranted %}
+                        {% sw_include '@Storefront/storefront/component/line-item/element/download-item.html.twig' %}
+                    {% endif %}
+                {% endfor %}
+
+                {% for group in extensionMeshCatalog.groups %}
+                    {% set collapseId = 'extension-mesh-versions-' ~ lineItem.id ~ '-' ~ loop.index %}
+                    {% set visibleRelease = group.releases|first %}
+                    {% set olderReleases = group.releases|slice(1) %}
+
+                    <section class="card mb-3">
+                        <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                            <strong>
+                                {{ 'extensionMesh.downloads.compatibleWith'|trans({
+                                    '%constraint%': group.shopware
+                                })|sw_sanitize }}
+                            </strong>
+                            <span class="text-body-secondary">
+                                {{ 'extensionMesh.downloads.latestVersion'|trans({
+                                    '%version%': visibleRelease.release.version
+                                })|sw_sanitize }}
+                            </span>
+                        </div>
+
+                        <div class="card-body p-0">
+                            {% sw_include
+                                '@ExtensionMesh/storefront/component/line-item/element/extension-mesh-download-item.html.twig'
+                                with { entry: visibleRelease }
+                            %}
+
+                            {% if olderReleases|length > 0 %}
+                                <div id="{{ collapseId }}" class="collapse">
+                                    {% for entry in olderReleases %}
+                                        {% sw_include
+                                            '@ExtensionMesh/storefront/component/line-item/element/extension-mesh-download-item.html.twig'
+                                            with { entry: entry }
+                                        %}
+                                    {% endfor %}
+                                </div>
+
+                                <div class="border-top p-3">
+                                    <button
+                                        class="btn btn-outline-secondary btn-sm"
+                                        type="button"
+                                        data-bs-toggle="collapse"
+                                        data-bs-target="#{{ collapseId }}"
+                                        aria-expanded="false"
+                                        aria-controls="{{ collapseId }}"
+                                    >
+                                        {{ 'extensionMesh.downloads.showOlder'|trans({
+                                            '%count%': olderReleases|length
+                                        })|sw_sanitize }}
+                                    </button>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </section>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endif %}
+{% endblock %}

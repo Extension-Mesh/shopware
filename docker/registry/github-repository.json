@@ -1,0 +1,7 @@
+{
+  "id": 4242,
+  "full_name": "acme/private-plugin",
+  "html_url": "https://github.example.test/acme/private-plugin",
+  "default_branch": "main",
+  "private": true
+}

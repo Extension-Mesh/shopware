@@ -1,0 +1,33 @@
+{% set download = entry.download %}
+{% if download.accessGranted %}
+    {% set downloadLabel = 'account.downloadFileButton'|trans|sw_sanitize %}
+    {% set downloadLink = path('frontend.account.order.single.download', {
+        orderId: order.id,
+        downloadId: download.id
+    }) %}
+
+    <div class="row align-items-start g-3 border-top p-3 m-0">
+        <div class="col-md-2">
+            <strong>{{ entry.release.version }}</strong>
+        </div>
+        <div class="col-md-7 text-body-secondary">
+            {% if entry.release.metadata.releaseNotes %}
+                <div class="extension-mesh-release-notes">
+                    {{ extension_mesh_release_notes(entry.release.metadata.releaseNotes) }}
+                </div>
+            {% else %}
+                {{ 'extensionMesh.downloads.noReleaseNotes'|trans|sw_sanitize }}
+            {% endif %}
+        </div>
+        <div class="col-md-3 text-md-end">
+            <a
+                href="{{ downloadLink }}"
+                target="_blank"
+                class="btn btn-light btn-sm"
+                aria-label="{{ downloadLabel }}"
+            >
+                {{ downloadLabel }}
+            </a>
+        </div>
+    </div>
+{% endif %}

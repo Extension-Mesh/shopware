@@ -1,0 +1,36 @@
+@import "../extension-mesh-registries/extension-mesh-registries";
+
+.extension-mesh-repositories {
+    max-width: 960px;
+    margin: 0 auto 32px;
+}
+
+.extension-mesh-token-form {
+    margin-top: 20px;
+}
+
+.extension-mesh-field-group {
+    min-width: 0;
+
+    > * + * {
+        margin-top: 8px;
+    }
+}
+
+.extension-mesh-token-link {
+    display: block;
+    width: fit-content;
+    margin-top: -12px;
+    color: var(--color-interaction-primary-default);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.extension-mesh-repositories .sw-data-grid {
+    small {
+        display: block;
+        margin-top: 4px;
+        color: var(--color-text-secondary-default);
+        overflow-wrap: anywhere;
+    }
+}

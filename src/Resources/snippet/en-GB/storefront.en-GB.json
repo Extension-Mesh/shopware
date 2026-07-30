@@ -1,0 +1,19 @@
+{
+  "extensionMesh": {
+    "downloads": {
+      "compatibleWith": "Shopware %constraint%",
+      "latestVersion": "Latest: %version%",
+      "noReleaseNotes": "No release notes were provided for this version.",
+      "showOlder": "Show %count% older version(s)"
+    },
+    "account": {
+      "title": "Extension access",
+      "explanation": "Use these details in ExtensionMesh on the Shopware installation that should receive your purchased extensions and updates.",
+      "registryUrl": "Registry URL",
+      "accessToken": "Access token",
+      "secretWarning": "Treat this token like a password. Rotating it immediately disables the previous token.",
+      "rotate": "Rotate access token",
+      "noEntitlements": "No active digital-product entitlement is available for this customer account."
+    }
+  }
+}

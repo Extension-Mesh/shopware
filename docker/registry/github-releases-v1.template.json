@@ -1,0 +1,19 @@
+[
+  {
+    "id": 100,
+    "tag_name": "v1.0.0",
+    "name": "Version 1.0.0",
+    "body": "Initial stable release.\n\n- Adds paid installation support.",
+    "published_at": "2026-07-20T12:00:00Z",
+    "draft": false,
+    "prerelease": false,
+    "assets": [
+      {
+        "id": 1001,
+        "name": "AcmeDemoPlugin-1.0.0.zip",
+        "size": __SIZE_1_0_0__,
+        "url": "http://registry/github-api/repos/acme/private-plugin/releases/assets/1001"
+      }
+    ]
+  }
+]

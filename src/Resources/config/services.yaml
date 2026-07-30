@@ -1,0 +1,103 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/symfony/dependency-injection/7.4/Loader/schema/services.schema.json
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        public: false
+
+    ExtensionMesh\Shopware\:
+        resource: '../../'
+        exclude:
+            - '../../ExtensionMesh.php'
+            - '../../Migration/'
+            - '../../Resources/'
+
+    ExtensionMesh\Shopware\Api\RegistryController:
+        public: true
+        arguments:
+            $shopwareVersion: '%kernel.shopware_version%'
+        calls:
+            - [setContainer, ['@service_container']]
+
+    ExtensionMesh\Shopware\Api\PublisherController:
+        public: true
+        calls:
+            - [setContainer, ['@service_container']]
+
+    ExtensionMesh\Shopware\Api\RepositoryController:
+        public: true
+
+    ExtensionMesh\Shopware\Api\ProductDownloadController:
+        public: true
+        arguments:
+            $messageBus: '@messenger.default_bus'
+
+    ExtensionMesh\Shopware\Storefront\PublisherController:
+        public: true
+        calls:
+            - [setContainer, ['@service_container']]
+
+    ExtensionMesh\Shopware\Storefront\AccountAccessController:
+        public: true
+        arguments:
+            $pageLoader: '@Shopware\Storefront\Page\GenericPageLoader'
+        calls:
+            - [setContainer, ['@service_container']]
+
+    ExtensionMesh\Shopware\Storefront\StoreApiAccessController:
+        public: true
+
+    ExtensionMesh\Shopware\Infrastructure\Http\NetworkPolicy:
+        arguments:
+            $allowPrivateNetworks: '%env(bool:EXTENSION_MESH_ALLOW_PRIVATE_NETWORKS)%'
+            $debug: '%kernel.debug%'
+
+    ExtensionMesh\Shopware\Infrastructure\Http\SafeHttpClient:
+        arguments:
+            $client: '@http_client'
+
+    ExtensionMesh\Shopware\Infrastructure\Security\CredentialCipher:
+        arguments:
+            $appSecret: '%kernel.secret%'
+
+    ExtensionMesh\Shopware\Service\AccessTokenService:
+        arguments:
+            $appSecret: '%kernel.secret%'
+
+    ExtensionMesh\Shopware\Service\ExtensionInstaller:
+        arguments:
+            $pluginManagementService: '@Shopware\Core\Framework\Plugin\PluginManagementService'
+
+    ExtensionMesh\Shopware\Repository\GithubRepositoryProvider:
+        tags:
+            - { name: extension_mesh.repository_provider }
+
+    ExtensionMesh\Shopware\Repository\RepositoryProviderRegistry:
+        arguments:
+            $providers: !tagged_iterator extension_mesh.repository_provider
+
+    ExtensionMesh\Shopware\Service\RepositoryProductWriter:
+        arguments:
+            $productRepository: '@product.repository'
+            $mediaRepository: '@media.repository'
+
+    ExtensionMesh\Shopware\Service\RepositorySynchronizer:
+        arguments:
+            $mediaRepository: '@media.repository'
+            $productDownloadRepository: '@product_download.repository'
+            $fileSaver: '@Shopware\Core\Content\Media\File\FileSaver'
+
+    ExtensionMesh\Shopware\Service\RepositoryOnboardingService:
+        arguments:
+            $messageBus: '@messenger.default_bus'
+
+    ExtensionMesh\Shopware\Message\RepositoryProcessHandler:
+        arguments:
+            $messageBus: '@messenger.default_bus'
+
+    ExtensionMesh\Shopware\ScheduledTask\RepositorySyncTaskHandler:
+        arguments:
+            $scheduledTaskRepository: '@scheduled_task.repository'
+
+parameters:
+    env(EXTENSION_MESH_ALLOW_PRIVATE_NETWORKS): '0'

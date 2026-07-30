@@ -1,0 +1,11 @@
+{% block sw_extension_card_base_info_content %}
+    {% parent %}
+
+    <span
+        v-if="extension.extensionMesh"
+        class="extension-mesh-source-badge"
+    >
+        {{ $t('extension-mesh.card.source', { source: extension.extensionMesh.registryName }) }}
+    </span>
+{% endblock %}
+

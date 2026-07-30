@@ -74,12 +74,36 @@ asynchronously and can also be started manually.
 ```bash
 composer install
 composer validate --strict
+composer analyse
 composer audit --locked --no-interaction
 find src .github/actions -name '*.php' -print0 | xargs -0 -n1 php -l
 ```
 
-The repository CI performs the same baseline checks and validates the generated
-release archive.
+The repository CI performs the same baseline checks, validates the Docker
+configuration and scripts, and verifies the generated release archive.
+
+## Docker integration environment
+
+The repository includes a local integration environment with separate buyer
+and seller installations plus a fixture registry.
+
+Requirements: Docker with Compose, `make`, `curl`, `jq`, `openssl` and `zip`.
+
+```bash
+make setup
+make battle-test
+make down
+```
+
+The default local endpoints are:
+
+- Buyer Administration: <http://localhost:8081/admin>
+- Seller Administration: <http://localhost:8082/admin>
+- Fixture registry: <http://localhost:8090/registry.json>
+
+The environment enables private-network registry URLs only inside the local
+containers. Production defaults continue to require HTTPS and reject private
+or reserved network targets.
 
 ## Project resources
 

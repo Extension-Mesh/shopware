@@ -1,0 +1,48 @@
+name: Publish ExtensionMesh registry
+description: >-
+  Build a plugin ZIP compatible with Shopware 6 and publish an ExtensionMesh
+  registry through GitHub Releases.
+
+runs:
+  using: composite
+  steps:
+    - name: Configure PHP
+      uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+      with:
+        php-version: "8.3"
+        extensions: json, zip
+        coverage: none
+
+    - name: Build release files
+      id: build
+      shell: bash
+      env:
+        EXTENSION_MESH_OUTPUT: ${{ runner.temp }}/extension-mesh-release
+        EXTENSION_MESH_GITHUB_TOKEN: ${{ github.token }}
+      run: php "$GITHUB_ACTION_PATH/build-release.php"
+
+    - name: Attest the plugin ZIP
+      if: ${{ github.event.repository.private == false }}
+      uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
+      with:
+        subject-path: ${{ steps.build.outputs.archive }}
+
+    - name: Create draft release and upload all assets
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_TAG: ${{ steps.build.outputs.tag }}
+        ARCHIVE: ${{ steps.build.outputs.archive }}
+        RELEASE_MANIFEST: ${{ steps.build.outputs.release-manifest }}
+        REGISTRY: ${{ steps.build.outputs.registry }}
+        CHECKSUMS: ${{ steps.build.outputs.checksums }}
+      run: |
+        gh release create "$RELEASE_TAG" \
+          --draft \
+          --verify-tag \
+          --generate-notes \
+          "$ARCHIVE" \
+          "$RELEASE_MANIFEST" \
+          "$REGISTRY" \
+          "$CHECKSUMS"
+        gh release edit "$RELEASE_TAG" --draft=false

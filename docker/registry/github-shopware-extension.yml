@@ -1,0 +1,25 @@
+compatibility_date: "2026-07-28"
+store:
+  default_locale: en_GB
+  localizations:
+    - de_DE
+    - en_GB
+  type: extension
+  icon: src/Resources/store/icon.png
+  image_directory: src/Resources/store/images
+  meta_title:
+    de: ExtensionMesh Import – Einfach verkaufen
+    en: ExtensionMesh Import - Sell extensions easily
+  meta_description:
+    de: Aus einem privaten Repository importiertes Shopware-Produkt.
+    en: A Shopware product imported from a private repository.
+  description:
+    de: file:src/Resources/store/description.de.html
+    en: file:src/Resources/store/description.en.html
+  tags:
+    de:
+      - Shopware
+      - Erweiterung
+    en:
+      - Shopware
+      - extension

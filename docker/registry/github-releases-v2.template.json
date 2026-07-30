@@ -1,0 +1,36 @@
+[
+  {
+    "id": 110,
+    "tag_name": "v1.1.0",
+    "name": "Version 1.1.0",
+    "body": "Repository synchronization improvements.\n\n- Imports releases in background batches.\n- Adds storefront release notes.",
+    "published_at": "2026-07-27T12:00:00Z",
+    "draft": false,
+    "prerelease": false,
+    "assets": [
+      {
+        "id": 1101,
+        "name": "AcmeDemoPlugin-1.1.0.zip",
+        "size": __SIZE_1_1_0__,
+        "url": "http://registry/github-api/repos/acme/private-plugin/releases/assets/1101"
+      }
+    ]
+  },
+  {
+    "id": 100,
+    "tag_name": "v1.0.0",
+    "name": "Version 1.0.0",
+    "body": "Initial stable release.\n\n- Adds paid installation support.",
+    "published_at": "2026-07-20T12:00:00Z",
+    "draft": false,
+    "prerelease": false,
+    "assets": [
+      {
+        "id": 1001,
+        "name": "AcmeDemoPlugin-1.0.0.zip",
+        "size": __SIZE_1_0_0__,
+        "url": "http://registry/github-api/repos/acme/private-plugin/releases/assets/1001"
+      }
+    ]
+  }
+]

@@ -1,0 +1,60 @@
+{
+  "name": "extension-mesh/shopware",
+  "description": "ExtensionMesh registry integration for Shopware 6 installations",
+  "type": "shopware-platform-plugin",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "ExtensionMesh contributors"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "ExtensionMesh\\Shopware\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "ExtensionMesh\\Shopware\\Test\\": "tests/"
+    }
+  },
+  "require": {
+    "php": ">=8.2",
+    "ext-json": "*",
+    "ext-sodium": "*",
+    "ext-zip": "*",
+    "composer/semver": "^3.4",
+    "shopware/core": "~6.7.0",
+    "shopware/storefront": "~6.7.0",
+    "symfony/http-client": "^7.2",
+    "symfony/yaml": "^7.2"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^11.0",
+    "shopwarelabs/phpstan-shopware": "^0.2.2"
+  },
+  "extra": {
+    "shopware-plugin-class": "ExtensionMesh\\Shopware\\ExtensionMesh",
+    "label": {
+      "de-DE": "ExtensionMesh",
+      "en-GB": "ExtensionMesh"
+    },
+    "description": {
+      "de-DE": "ExtensionMesh-Registry-Integration für Shopware-6-Installationen.",
+      "en-GB": "ExtensionMesh registry integration for Shopware 6 installations."
+    }
+  },
+  "config": {
+    "allow-plugins": {
+      "symfony/runtime": true
+    },
+    "platform": {
+      "php": "8.2.0"
+    },
+    "sort-packages": true
+  },
+  "scripts": {
+    "analyse": "phpstan analyse --configuration=phpstan.neon --no-progress --memory-limit=1G",
+    "test": "phpunit -c phpunit.xml.dist"
+  }
+}

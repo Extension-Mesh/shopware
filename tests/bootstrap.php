@@ -1,0 +1,9 @@
+<?php declare(strict_types=1);
+
+use Composer\Autoload\ClassLoader;
+
+$loader = require __DIR__ . '/../vendor/autoload.php';
+
+if (!$loader instanceof ClassLoader) {
+    throw new RuntimeException('Composer autoloader could not be loaded.');
+}

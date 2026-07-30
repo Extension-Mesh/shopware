@@ -1,0 +1,8 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/symfony/routing/7.4/Loader/schema/routing.schema.json
+extension_mesh_api:
+    resource: ../../Api/*Controller.php
+    type: attribute
+
+extension_mesh_storefront:
+    resource: ../../Storefront/*Controller.php
+    type: attribute
