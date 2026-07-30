@@ -38,7 +38,7 @@ runs:
         CHECKSUMS: ${{ steps.build.outputs.checksums }}
         VERSION: ${{ steps.build.outputs.version }}
       run: |
-        release_options=(--draft --verify-tag --generate-notes)
+        release_options=(--draft --generate-notes --target "$GITHUB_SHA")
         if [[ "$VERSION" == *-* ]]; then
           release_options+=(--prerelease)
         fi

@@ -14,8 +14,15 @@ on:
       - main
     paths:
       - composer.json
+      - composer.lock
+      - .github/actions/publish-shopware/**
+      - .github/workflows/publish-extension.yml
 
 permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   verify-release:
@@ -154,8 +161,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect version change
-        id: release
+      - name: Read extension version
+        id: extension
         shell: bash
         run: |
           version="$(jq -er '.version' composer.json)"
@@ -164,49 +171,27 @@ jobs:
             exit 1
           fi
 
-          previous_version=""
-          if previous_composer="$(git show "${GITHUB_SHA}^:composer.json" 2>/dev/null)"; then
-            previous_version="$(jq -r '.version // empty' <<< "$previous_composer")"
-          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
 
-          if [[ "$version" == "$previous_version" ]]; then
-            echo "Composer version unchanged; no release requested."
-            echo "publish=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          tag="v${version}"
-          create_tag=true
-          existing_tag="$(
-            git ls-remote --tags origin "refs/tags/${tag}" \
-              | awk 'NR == 1 { print $1 }'
-          )"
-          if [[ -n "$existing_tag" ]]; then
-            if [[ "$existing_tag" != "$GITHUB_SHA" ]]; then
-              echo "Tag ${tag} already points to another commit; refusing to replace it." >&2
-              exit 1
-            fi
-            echo "Tag ${tag} already points to this commit; reusing it."
-            create_tag=false
-          fi
-
-          echo "publish=true" >> "$GITHUB_OUTPUT"
-          echo "create_tag=${create_tag}" >> "$GITHUB_OUTPUT"
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-          echo "EXTENSION_MESH_TAG=${tag}" >> "$GITHUB_ENV"
-
-      - name: Create release tag
-        if: >-
-          steps.release.outputs.publish == 'true' &&
-          steps.release.outputs.create_tag == 'true'
+      - name: Check for existing GitHub release
+        id: release
+        shell: bash
         env:
-          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.extension.outputs.tag }}
         run: |
-          git tag "$RELEASE_TAG" "$GITHUB_SHA"
-          git push origin "refs/tags/$RELEASE_TAG"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release ${RELEASE_TAG} already exists; nothing to publish."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build and publish the compatible package
-        if: steps.release.outputs.publish == 'true'
+        if: steps.release.outputs.exists != 'true'
+        env:
+          EXTENSION_MESH_TAG: ${{ steps.extension.outputs.tag }}
         uses: ./.github/actions/publish-shopware
 
   publish-caller:
