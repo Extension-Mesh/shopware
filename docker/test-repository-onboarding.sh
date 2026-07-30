@@ -62,7 +62,7 @@ wait_for_repository() {
         wait_attempts=$((wait_attempts + 1))
         docker compose exec -T seller \
             bin/console messenger:consume async \
-            --limit=1 --time-limit=10 --no-ansi --no-interaction >/dev/null
+            --time-limit=10 --no-ansi --no-interaction >/dev/null
         curl -fsS \
             "${seller_api}/_action/extension-mesh/repositories?page=1&limit=100" \
             -H "${auth_header}" \
