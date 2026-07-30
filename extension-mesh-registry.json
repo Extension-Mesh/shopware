@@ -1,0 +1,52 @@
+{
+    "schemaVersion": 1,
+    "name": "Extension-Mesh/shopware",
+    "extensions": [
+        {
+            "name": "ExtensionMesh",
+            "label": {
+                "de-DE": "ExtensionMesh",
+                "en-GB": "ExtensionMesh"
+            },
+            "description": {
+                "de-DE": "ExtensionMesh verbindet Shopware-6-Installationen mit kompatiblen Extension-Registries f\u00fcr sichere Suche, Validierung, Installation und Updates \u00fcber den nativen Plugin-Lifecycle.",
+                "en-GB": "ExtensionMesh connects Shopware 6 installations to compatible extension registries for secure discovery, validation, installation, and updates through the native plugin lifecycle."
+            },
+            "manufacturer": "ExtensionMesh contributors",
+            "license": "MIT",
+            "homepage": "https://github.com/Extension-Mesh/shopware",
+            "releases": [
+                {
+                    "version": "0.1.0-alpha.3",
+                    "shopware": "~6.7.0",
+                    "php": ">=8.2",
+                    "downloadUrl": "https://github.com/Extension-Mesh/shopware/releases/download/v0.1.0-alpha.3/ExtensionMesh-0.1.0-alpha.3.zip",
+                    "sha256": "3da075f89d0e061e399121099dc7bb32ef97ca8f8f3221fbbb010c5cf8b6be1e",
+                    "releasedAt": "2026-07-30T12:52:03+00:00",
+                    "security": false,
+                    "changelogUrl": "https://github.com/Extension-Mesh/shopware/releases/tag/v0.1.0-alpha.3"
+                },
+                {
+                    "version": "0.1.0-alpha.2",
+                    "shopware": "~6.7.0",
+                    "php": ">=8.2",
+                    "downloadUrl": "https://github.com/Extension-Mesh/shopware/releases/download/v0.1.0-alpha.2/ExtensionMesh-0.1.0-alpha.2.zip",
+                    "sha256": "0c8fcabc0f095fe5ae90b4a938edddfaed36cc4fb91bcec8397db0f7dc6ea9bf",
+                    "releasedAt": "2026-07-30T12:17:11+00:00",
+                    "security": false,
+                    "changelogUrl": "https://github.com/Extension-Mesh/shopware/releases/tag/v0.1.0-alpha.2"
+                },
+                {
+                    "version": "0.1.0-alpha.1",
+                    "shopware": "~6.7.0",
+                    "php": ">=8.2",
+                    "downloadUrl": "https://github.com/Extension-Mesh/shopware/releases/download/v0.1.0-alpha.1/ExtensionMesh-0.1.0-alpha.1.zip",
+                    "sha256": "5121ddcaa1905f6eada117972310154fef651028c0b4b4e2b9baaa7dcd75f652",
+                    "releasedAt": "2026-07-30T10:33:41+00:00",
+                    "security": false,
+                    "changelogUrl": "https://github.com/Extension-Mesh/shopware/releases/tag/v0.1.0-alpha.1"
+                }
+            ]
+        }
+    ]
+}
