@@ -51,15 +51,7 @@ jobs:
             ExtensionMesh/composer.json | jq -e '.version == "0.0.0"'
           unzip -Z1 "$EXTENSION_MESH_OUTPUT/ExtensionMesh-0.0.0.zip" \
             > "$RUNNER_TEMP/extension-mesh-archive-files"
-          grep -q '^ExtensionMesh/src/Resources/public/administration/.vite/entrypoints.json
-      - name: Validate development environment
-        run: |
-          docker compose config --quiet
-          sh -n docker/registry/build-fixture.sh docker/wait-for-dockware.sh \
-            docker/test-interactions.sh docker/test-paid-entitlements.sh \
-            docker/test-repository-onboarding.sh
-          git diff --check
- \
+          grep -q '^ExtensionMesh/src/Resources/public/administration/.vite/entrypoints.json$' \
             "$RUNNER_TEMP/extension-mesh-archive-files"
           EXTENSION_MESH_OUTPUT="$RUNNER_TEMP/extension-mesh-ci-release-repeat" \
             php .github/actions/publish-shopware/build-release.php
