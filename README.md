@@ -69,6 +69,13 @@ Stable GitHub Release assets can be linked to an existing product or imported
 into a new inactive draft product. Repository synchronization runs
 asynchronously and can also be started manually.
 
+## Publish from a plugin repository
+
+The reusable publishing action builds a validated plugin ZIP and publishes the
+ZIP, checksum and ExtensionMesh registry metadata with a GitHub Release. See
+[Publishing from GitHub](docs/github-publishing.md) for a minimal workflow and
+the current alpha limitations.
+
 ## Development checks
 
 ```bash
@@ -86,12 +93,12 @@ configuration and scripts, and verifies the generated release archive.
 ## Releases
 
 The top-level `version` in `composer.json` is the release source of truth.
-Changing it on `main`, for example to `0.1.0-alpha.1`, starts the complete
-release verification. The workflow repeats the baseline checks and runs the
-Dockware integration suite. The installable archive is built and validated with
-Shopware CLI. After both jobs succeed, the workflow creates the matching
-`v0.1.0-alpha.1` tag and publishes the release. Changes to other Composer
-metadata do not publish a release while the version remains unchanged.
+Changing it on `main` starts the complete release verification. The workflow
+repeats the baseline checks and runs the Dockware integration suite. The
+installable archive is built and validated with Shopware CLI. After both jobs
+succeed, the workflow creates the matching version tag and publishes the
+release. Changes to other Composer metadata do not publish a release while the
+version remains unchanged.
 
 Each release contains the installable plugin ZIP, its SHA-256 checksum, an
 ExtensionMesh release manifest and a single-extension registry manifest.

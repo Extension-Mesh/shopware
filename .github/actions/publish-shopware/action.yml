@@ -22,8 +22,15 @@ runs:
       shell: bash
       run: |
         shopware-cli extension zip --git-commit "$GITHUB_SHA" . --release
-        source_archive="$GITHUB_WORKSPACE/ExtensionMesh-$GITHUB_SHA.zip"
-        test -f "$source_archive"
+        mapfile -d '' source_archives < <(
+          find "$GITHUB_WORKSPACE" -maxdepth 1 -type f \
+            -name "*-$GITHUB_SHA.zip" -print0
+        )
+        if [[ "${#source_archives[@]}" -ne 1 ]]; then
+          echo "Expected exactly one extension archive, found ${#source_archives[@]}." >&2
+          exit 1
+        fi
+        source_archive="${source_archives[0]}"
         shopware-cli extension validate "$source_archive"
         echo "EXTENSION_MESH_SOURCE_ARCHIVE=$source_archive" >> "$GITHUB_ENV"
 
