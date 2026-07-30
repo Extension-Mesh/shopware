@@ -96,6 +96,8 @@ make battle-test
 make down
 ```
 
+The same integration environment runs nightly in GitHub Actions and can also be started manually with a selected Dockware image.
+
 The default local endpoints are:
 
 - Buyer Administration: <http://localhost:8081/admin>
