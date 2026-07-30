@@ -1,12 +1,36 @@
 name: Publish ExtensionMesh registry
 description: >-
-  Build a plugin ZIP compatible with Shopware 6 and publish an ExtensionMesh
-  registry through GitHub Releases.
+  Build a plugin ZIP compatible with Shopware 6, publish a GitHub Release and
+  update the repository's stable ExtensionMesh registry channel.
 
 runs:
   using: composite
   steps:
+    - name: Prepare release context
+      id: release
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        release_tag="${EXTENSION_MESH_TAG:-$GITHUB_REF_NAME}"
+        output_dir="$RUNNER_TEMP/extension-mesh-release"
+        mkdir -p "$output_dir"
+
+        echo "EXTENSION_MESH_TAG=$release_tag" >> "$GITHUB_ENV"
+        echo "EXTENSION_MESH_OUTPUT=$output_dir" >> "$GITHUB_ENV"
+
+        if gh release view "$release_tag" >/dev/null 2>&1; then
+          echo "Release $release_tag already exists; reusing its registry asset."
+          gh release download "$release_tag" \
+            --pattern extension-mesh-registry.json \
+            --dir "$output_dir"
+          echo "exists=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "exists=false" >> "$GITHUB_OUTPUT"
+        fi
+
     - name: Configure PHP
+      if: steps.release.outputs.exists != 'true'
       uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
       with:
         php-version: "8.3"
@@ -14,11 +38,13 @@ runs:
         coverage: none
 
     - name: Install Shopware CLI
+      if: steps.release.outputs.exists != 'true'
       uses: FriendsOfShopware/shopware-cli-action@b67b48ccb52beb8533ea276152e1f89f29bbd080 # v3
       with:
         version: latest
 
     - name: Build and validate extension ZIP
+      if: steps.release.outputs.exists != 'true'
       shell: bash
       run: |
         shopware-cli extension zip --git-commit "$GITHUB_SHA" . --release
@@ -35,24 +61,26 @@ runs:
         echo "EXTENSION_MESH_SOURCE_ARCHIVE=$source_archive" >> "$GITHUB_ENV"
 
     - name: Build release files
+      if: steps.release.outputs.exists != 'true'
       id: build
       shell: bash
       env:
-        EXTENSION_MESH_OUTPUT: ${{ runner.temp }}/extension-mesh-release
         EXTENSION_MESH_GITHUB_TOKEN: ${{ github.token }}
       run: php "$GITHUB_ACTION_PATH/build-release.php"
 
     - name: Attest the plugin ZIP
-      if: ${{ github.event.repository.private == false }}
+      if: >-
+        steps.release.outputs.exists != 'true' &&
+        github.event.repository.private == false
       uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
       with:
         subject-path: ${{ steps.build.outputs.archive }}
 
-    - name: Create draft release and upload all assets
+    - name: Create release and upload assets
+      if: steps.release.outputs.exists != 'true'
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
-        RELEASE_TAG: ${{ steps.build.outputs.tag }}
         ARCHIVE: ${{ steps.build.outputs.archive }}
         RELEASE_MANIFEST: ${{ steps.build.outputs.release-manifest }}
         REGISTRY: ${{ steps.build.outputs.registry }}
@@ -64,10 +92,18 @@ runs:
           release_options+=(--prerelease)
         fi
 
-        gh release create "$RELEASE_TAG" \
+        gh release create "$EXTENSION_MESH_TAG" \
           "${release_options[@]}" \
           "$ARCHIVE" \
           "$RELEASE_MANIFEST" \
           "$REGISTRY" \
           "$CHECKSUMS"
-        gh release edit "$RELEASE_TAG" --draft=false
+        gh release edit "$EXTENSION_MESH_TAG" --draft=false
+
+    - name: Update stable registry channel
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REGISTRY: ${{ runner.temp }}/extension-mesh-release/extension-mesh-registry.json
+        VERSION: ${{ steps.build.outputs.version }}
+      run: bash "$GITHUB_ACTION_PATH/publish-registry.sh"

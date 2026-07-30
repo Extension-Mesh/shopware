@@ -20,7 +20,8 @@ final class RegistryUrlNormalizerTest extends TestCase
      */
     public static function githubUrls(): iterable
     {
-        $expected = 'https://github.com/acme/shopware-plugin/releases/latest/download/extension-mesh-registry.json';
+        $expected = 'https://raw.githubusercontent.com/acme/shopware-plugin/'
+            . 'extension-mesh-registry/extension-mesh-registry.json';
 
         yield 'repository' => ['https://github.com/acme/shopware-plugin', $expected];
         yield 'trailing slash' => ['https://github.com/acme/shopware-plugin/', $expected];

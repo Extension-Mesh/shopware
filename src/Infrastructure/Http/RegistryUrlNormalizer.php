@@ -36,7 +36,7 @@ final class RegistryUrlNormalizer
                 $this->assertGitHubSegment($repository);
 
                 return $this->assertStorable(\sprintf(
-                    'https://github.com/%s/%s/releases/latest/download/extension-mesh-registry.json',
+                    'https://raw.githubusercontent.com/%s/%s/extension-mesh-registry/extension-mesh-registry.json',
                     $owner,
                     $repository
                 ));

@@ -52,7 +52,7 @@ jobs:
           fetch-depth: 0
 
       - name: Build and publish
-        uses: Extension-Mesh/shopware/.github/actions/publish-shopware@v0.1.0-alpha.2
+        uses: Extension-Mesh/shopware/.github/actions/publish-shopware@v0.1.0-alpha.3
 ```
 
 Commit the workflow, set the release version in `composer.json`, then create and
@@ -63,28 +63,34 @@ git tag v1.2.0
 git push origin v1.2.0
 ```
 
-The workflow creates the GitHub Release and its registry metadata. Do not create
-the release manually before the workflow runs.
+The workflow creates the GitHub Release and its registry metadata. It also
+updates the generated `extension-mesh-registry` branch with the current
+registry document. Do not edit that branch or create the release manually
+before the workflow runs.
 
 ## Connect the repository
 
-For a normal GitHub Release, administrators can add the repository URL itself:
+Administrators add the repository URL itself:
 
 ```text
 https://github.com/owner/plugin-repository
 ```
 
-The connector resolves this URL to the
-`extension-mesh-registry.json` asset of the latest non-prerelease release.
+The connector resolves this URL to the generated registry channel:
 
-GitHub does not expose prereleases through its `releases/latest` URL. To test a
-prerelease, add the exact `extension-mesh-registry.json` asset URL instead.
+```text
+https://raw.githubusercontent.com/owner/plugin-repository/extension-mesh-registry/extension-mesh-registry.json
+```
+
+Every successful release updates this document, including prereleases. The
+repository URL therefore remains stable while the published version changes.
 
 ## Current alpha boundaries
 
 - The action currently targets conventional Shopware 6 plugin repositories.
 - Tags and release versions use semantic versions.
-- GitHub repository discovery only sees non-draft, non-prerelease releases.
+- The generated registry channel represents the most recently published
+  release, including prereleases.
 - The action and generated registry format may change during the alpha phase.
 - Test the complete install and update path in an isolated Shopware 6.7
   installation before wider use.

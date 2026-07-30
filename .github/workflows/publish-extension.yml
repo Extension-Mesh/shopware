@@ -74,6 +74,7 @@ jobs:
           sh -n docker/registry/build-fixture.sh docker/wait-for-dockware.sh \
             docker/test-interactions.sh docker/test-paid-entitlements.sh \
             docker/test-repository-onboarding.sh
+          bash -n .github/actions/publish-shopware/publish-registry.sh
 
       - name: Build and validate extension ZIP
         run: |
@@ -186,22 +187,7 @@ jobs:
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "tag=v${version}" >> "$GITHUB_OUTPUT"
 
-      - name: Check for existing GitHub release
-        id: release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ steps.extension.outputs.tag }}
-        run: |
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "Release ${RELEASE_TAG} already exists; nothing to publish."
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Build and publish the compatible package
-        if: steps.release.outputs.exists != 'true'
         env:
           EXTENSION_MESH_TAG: ${{ steps.extension.outputs.tag }}
         uses: ./.github/actions/publish-shopware
@@ -220,4 +206,4 @@ jobs:
           fetch-depth: 0
 
       - name: Build and publish the compatible package
-        uses: extension-mesh/shopware/.github/actions/publish-shopware@v1
+        uses: extension-mesh/shopware/.github/actions/publish-shopware@v0.1.0-alpha.3

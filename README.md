@@ -39,7 +39,8 @@ Do not use `dev-main` as an unattended production update source.
 ## Add a registry
 
 1. Open **Extensions → My extensions → Registries**.
-2. Add a compatible registry URL or GitHub repository URL.
+2. Add a compatible registry URL or GitHub repository URL, for example
+   `https://github.com/Extension-Mesh/shopware`.
 3. Enter an access token when the source requires authentication.
 4. Review compatible extensions and start installation or updates from the
    extension list.
@@ -72,7 +73,9 @@ asynchronously and can also be started manually.
 ## Publish from a plugin repository
 
 The reusable publishing action builds a validated plugin ZIP and publishes the
-ZIP, checksum and ExtensionMesh registry metadata with a GitHub Release. See
+ZIP, checksum and ExtensionMesh registry metadata with a GitHub Release. On
+every release it also updates a generated registry channel, so consumers can
+keep using the repository URL instead of a version-specific asset URL. See
 [Publishing from GitHub](docs/github-publishing.md) for a minimal workflow and
 the current alpha limitations.
 
@@ -104,7 +107,8 @@ Each release contains the installable plugin ZIP, its SHA-256 checksum, an
 ExtensionMesh release manifest and a single-extension registry manifest.
 Pre-release versions are marked as pre-releases automatically. The workflow can
 also be started manually to verify the release path without publishing a
-release.
+release. After publishing, it updates the generated `extension-mesh-registry`
+branch with the current registry document.
 
 ## Docker integration environment
 

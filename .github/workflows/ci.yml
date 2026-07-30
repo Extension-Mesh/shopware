@@ -38,6 +38,7 @@ jobs:
         run: |
           find src .github/actions -name '*.php' -print0 \
             | xargs -0 -n1 php -l
+          bash -n .github/actions/publish-shopware/publish-registry.sh
 
       - name: Validate release archive
         env:
