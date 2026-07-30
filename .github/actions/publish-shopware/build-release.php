@@ -46,6 +46,22 @@ function output(string $name, string $value): void
     }
 }
 
+function sourceTimestamp(string $repositoryRoot): int
+{
+    $command = sprintf(
+        'git -C %s log -1 --format=%%ct HEAD',
+        escapeshellarg($repositoryRoot)
+    );
+    exec($command, $output, $exitCode);
+    $timestamp = trim(implode("\n", $output));
+
+    if ($exitCode !== 0 || !preg_match('/^[0-9]+$/', $timestamp)) {
+        fail('the source commit timestamp could not be determined.');
+    }
+
+    return (int) $timestamp;
+}
+
 /**
  * @return list<array<string, mixed>>
  */
@@ -175,6 +191,7 @@ $tag = is_string($tagOverride) && $tagOverride !== ''
     ? $tagOverride
     : requiredEnvironment('GITHUB_REF_NAME');
 $outputDirectory = requiredEnvironment('EXTENSION_MESH_OUTPUT');
+$sourceTimestamp = sourceTimestamp($repositoryRoot);
 
 if (!preg_match('/^v?([0-9]+(?:\.[0-9]+){1,3}(?:[-+][0-9A-Za-z.-]+)?)$/', $tag, $versionMatch)) {
     fail("tag \"{$tag}\" is not a supported release version.");
@@ -295,8 +312,17 @@ try {
     $archive->close();
     fail('composer.json could not be packaged: ' . $exception->getMessage());
 }
-if (!$archive->addFromString($technicalName . '/composer.json', $packagedComposer) || !$archive->close()) {
+$composerEntry = $technicalName . '/composer.json';
+if (!$archive->addFromString($composerEntry, $packagedComposer)) {
+    $archive->close();
     fail('composer.json could not be stamped with the tag version.');
+}
+if (!$archive->setMtimeName($composerEntry, $sourceTimestamp)) {
+    $archive->close();
+    fail('composer.json could not receive the source commit timestamp.');
+}
+if (!$archive->close()) {
+    fail('the generated plugin ZIP could not be finalized.');
 }
 
 $digest = hash_file('sha256', $archivePath);

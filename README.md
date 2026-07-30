@@ -83,6 +83,18 @@ find src .github/actions -name '*.php' -print0 | xargs -0 -n1 php -l
 The repository CI performs the same baseline checks, validates the Docker
 configuration and scripts, and verifies the generated release archive.
 
+## Releases
+
+Version tags such as `v0.1.0-alpha.1` start a gated release workflow. The
+workflow repeats the baseline checks, runs the complete Dockware integration
+suite and publishes only after both jobs succeed.
+
+Each release contains the installable plugin ZIP, its SHA-256 checksum, an
+ExtensionMesh release manifest and a single-extension registry manifest.
+Pre-release version tags are marked as pre-releases automatically. The workflow
+can also be started manually to verify the release path without publishing a
+release.
+
 ## Docker integration environment
 
 The repository includes a local integration environment with separate buyer

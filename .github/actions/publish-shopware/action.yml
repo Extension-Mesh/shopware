@@ -36,11 +36,15 @@ runs:
         RELEASE_MANIFEST: ${{ steps.build.outputs.release-manifest }}
         REGISTRY: ${{ steps.build.outputs.registry }}
         CHECKSUMS: ${{ steps.build.outputs.checksums }}
+        VERSION: ${{ steps.build.outputs.version }}
       run: |
+        release_options=(--draft --verify-tag --generate-notes)
+        if [[ "$VERSION" == *-* ]]; then
+          release_options+=(--prerelease)
+        fi
+
         gh release create "$RELEASE_TAG" \
-          --draft \
-          --verify-tag \
-          --generate-notes \
+          "${release_options[@]}" \
           "$ARCHIVE" \
           "$RELEASE_MANIFEST" \
           "$REGISTRY" \
