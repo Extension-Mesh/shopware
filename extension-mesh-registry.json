@@ -17,6 +17,16 @@
             "homepage": "https://github.com/Extension-Mesh/shopware",
             "releases": [
                 {
+                    "version": "0.1.0-alpha.4",
+                    "shopware": "~6.7.0",
+                    "php": ">=8.2",
+                    "downloadUrl": "https://github.com/Extension-Mesh/shopware/releases/download/v0.1.0-alpha.4/ExtensionMesh-0.1.0-alpha.4.zip",
+                    "sha256": "7a47b3a359037e73194d954ab98b5a1dede92b5fcd58d13ddcfb6fc1c22a1cc9",
+                    "releasedAt": "2026-07-30T14:19:36+00:00",
+                    "security": false,
+                    "changelogUrl": "https://github.com/Extension-Mesh/shopware/releases/tag/v0.1.0-alpha.4"
+                },
+                {
                     "version": "0.1.0-alpha.3",
                     "shopware": "~6.7.0",
                     "php": ">=8.2",
