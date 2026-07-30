@@ -14,7 +14,6 @@ on:
       - main
     paths:
       - composer.json
-      - composer.lock
       - .github/actions/publish-shopware/**
       - .github/workflows/publish-extension.yml
 
