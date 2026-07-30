@@ -73,7 +73,7 @@ asynchronously and can also be started manually.
 
 ```bash
 composer install
-composer validate --strict
+composer validate --strict --no-check-version
 composer test
 composer analyse
 composer audit --locked --no-interaction
@@ -85,14 +85,17 @@ configuration and scripts, and verifies the generated release archive.
 
 ## Releases
 
-Version tags such as `v0.1.0-alpha.1` start a gated release workflow. The
-workflow repeats the baseline checks, runs the complete Dockware integration
-suite and publishes only after both jobs succeed.
+The top-level `version` in `composer.json` is the release source of truth.
+Changing it on `main`, for example to `0.1.0-alpha.1`, starts the complete
+release verification. The workflow repeats the baseline checks and runs the
+Dockware integration suite. After both jobs succeed, it creates the matching
+`v0.1.0-alpha.1` tag and publishes the release. Changes to other Composer
+metadata do not publish a release while the version remains unchanged.
 
 Each release contains the installable plugin ZIP, its SHA-256 checksum, an
 ExtensionMesh release manifest and a single-extension registry manifest.
-Pre-release version tags are marked as pre-releases automatically. The workflow
-can also be started manually to verify the release path without publishing a
+Pre-release versions are marked as pre-releases automatically. The workflow can
+also be started manually to verify the release path without publishing a
 release.
 
 ## Docker integration environment
