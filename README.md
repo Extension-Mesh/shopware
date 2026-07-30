@@ -74,6 +74,7 @@ asynchronously and can also be started manually.
 ```bash
 composer install
 composer validate --strict
+composer test
 composer analyse
 composer audit --locked --no-interaction
 find src .github/actions -name '*.php' -print0 | xargs -0 -n1 php -l

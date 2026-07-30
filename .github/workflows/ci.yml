@@ -27,9 +27,10 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist
 
-      - name: Validate, analyse and audit
+      - name: Validate, test, analyse and audit
         run: |
           composer validate --strict
+          composer test
           composer analyse
           composer audit --locked --no-interaction
 
