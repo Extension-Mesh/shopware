@@ -30,7 +30,7 @@ build-admin:
 	wait $$seller_pid; seller_status=$$?; \
 	exit $$((buyer_status || seller_status))
 
-battle-test: fixture
+battle-test:
 	docker compose exec -T buyer bin/console cache:clear --no-ansi
 	docker compose exec -T seller bin/console cache:clear --no-ansi
 	sh ./docker/test-interactions.sh
