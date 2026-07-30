@@ -1,7 +1,6 @@
 name: Release
 
 on:
-  workflow_call:
   workflow_dispatch:
     inputs:
       dockware_image:
@@ -14,7 +13,6 @@ on:
       - main
     paths:
       - composer.json
-      - .github/actions/publish-shopware/**
       - .github/workflows/publish-extension.yml
 
 permissions: {}
@@ -25,7 +23,6 @@ concurrency:
 
 jobs:
   verify-release:
-    if: github.event_name != 'workflow_call'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -69,12 +66,11 @@ jobs:
 
       - name: Check PHP and shell syntax
         run: |
-          find src .github/actions -name '*.php' -print0 \
+          find src -name '*.php' -print0 \
             | xargs -0 -n1 php -l
           sh -n docker/registry/build-fixture.sh docker/wait-for-dockware.sh \
             docker/test-interactions.sh docker/test-paid-entitlements.sh \
             docker/test-repository-onboarding.sh
-          bash -n .github/actions/publish-shopware/publish-registry.sh
 
       - name: Build and validate extension ZIP
         run: |
@@ -82,34 +78,6 @@ jobs:
           source_archive="$GITHUB_WORKSPACE/ExtensionMesh-$GITHUB_SHA.zip"
           test -f "$source_archive"
           shopware-cli extension validate "$source_archive"
-          echo "EXTENSION_MESH_SOURCE_ARCHIVE=$source_archive" >> "$GITHUB_ENV"
-
-      - name: Validate reproducible release archive
-        env:
-          EXTENSION_MESH_OUTPUT: ${{ runner.temp }}/extension-mesh-release-first
-          EXTENSION_MESH_SKIP_HISTORY: "1"
-        run: |
-          php .github/actions/publish-shopware/build-release.php
-          version="${EXTENSION_MESH_TAG#v}"
-          archive="ExtensionMesh-${version}.zip"
-          unzip -t "$EXTENSION_MESH_OUTPUT/$archive"
-          unzip -p "$EXTENSION_MESH_OUTPUT/$archive" \
-            ExtensionMesh/composer.json | jq -e --arg version "$version" \
-            '.version == $version'
-          unzip -Z1 "$EXTENSION_MESH_OUTPUT/$archive" \
-            > "$RUNNER_TEMP/extension-mesh-archive-files"
-          grep -q '^ExtensionMesh/src/Resources/public/administration/.vite/entrypoints.json$' \
-            "$RUNNER_TEMP/extension-mesh-archive-files"
-          if grep -Eq '^ExtensionMesh/(.github|docker|tests)/' \
-            "$RUNNER_TEMP/extension-mesh-archive-files"; then
-            echo "Development files found in release archive" >&2
-            exit 1
-          fi
-          EXTENSION_MESH_OUTPUT="$RUNNER_TEMP/extension-mesh-release-second" \
-            php .github/actions/publish-shopware/build-release.php
-          cmp \
-            "$EXTENSION_MESH_OUTPUT/$archive" \
-            "$RUNNER_TEMP/extension-mesh-release-second/$archive"
 
       - name: Validate development environment
         run: |
@@ -117,7 +85,6 @@ jobs:
           git diff --check
 
   integration-release:
-    if: github.event_name != 'workflow_call'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -190,20 +157,4 @@ jobs:
       - name: Build and publish the compatible package
         env:
           EXTENSION_MESH_TAG: ${{ steps.extension.outputs.tag }}
-        uses: ./.github/actions/publish-shopware
-
-  publish-caller:
-    if: github.event_name == 'workflow_call'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      id-token: write
-      attestations: write
-    steps:
-      - name: Check out the tagged source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          fetch-depth: 0
-
-      - name: Build and publish the compatible package
-        uses: extension-mesh/shopware/.github/actions/publish-shopware@v0.1.0-alpha.3
+        uses: Extension-Mesh/shopware-publisher@v0.1.0-alpha.1

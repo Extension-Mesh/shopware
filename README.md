@@ -72,10 +72,12 @@ asynchronously and can also be started manually.
 
 ## Publish from a plugin repository
 
-The reusable publishing action builds a validated plugin ZIP and publishes the
-ZIP, checksum and ExtensionMesh registry metadata with a GitHub Release. On
-every release it also updates a generated registry channel, so consumers can
-keep using the repository URL instead of a version-specific asset URL. See
+The reusable workflow from
+[`Extension-Mesh/shopware-publisher`](https://github.com/Extension-Mesh/shopware-publisher)
+builds a validated plugin ZIP and publishes the ZIP, checksum and ExtensionMesh
+registry metadata with a GitHub Release. On every release it also updates a
+generated registry channel, so consumers can keep using the repository URL
+instead of a version-specific asset URL. See
 [Publishing from GitHub](docs/github-publishing.md) for a minimal workflow and
 the current alpha limitations.
 
@@ -87,11 +89,13 @@ composer validate --strict --no-check-version
 composer test
 composer analyse
 composer audit --locked --no-interaction
-find src .github/actions -name '*.php' -print0 | xargs -0 -n1 php -l
+find src -name '*.php' -print0 | xargs -0 -n1 php -l
 ```
 
 The repository CI performs the same baseline checks, validates the Docker
-configuration and scripts, and verifies the generated release archive.
+configuration and scripts. The release workflow builds and validates the
+installable archive with Shopware CLI before publishing through the separate
+publisher.
 
 ## Releases
 
@@ -138,6 +142,7 @@ or reserved network targets.
 ## Project resources
 
 - Website and documentation: <https://www.extension-mesh.dev>
+- Publishing workflow: <https://github.com/Extension-Mesh/shopware-publisher>
 - Issues: <https://github.com/Extension-Mesh/shopware/issues>
 - Security reports: use GitHub's private vulnerability reporting for this repository
 

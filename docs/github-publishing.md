@@ -1,16 +1,18 @@
 # Publishing from GitHub
 
-The ExtensionMesh publishing action turns a conventional Shopware 6 plugin
-repository into an independent extension source. It builds and validates the
-plugin with Shopware CLI, then attaches these files to a GitHub Release:
+The ExtensionMesh publisher turns a conventional Shopware 6 plugin repository
+into an independent extension source. It builds and validates the plugin with
+Shopware CLI, then attaches these files to a GitHub Release:
 
 - the installable plugin ZIP
 - `SHA256SUMS`
 - `extension-mesh-release.json`
 - `extension-mesh-registry.json`
 
-The current action is an alpha interface. Pin the exact alpha version and
-review changes before updating it.
+The publisher is maintained separately in
+[`Extension-Mesh/shopware-publisher`](https://github.com/Extension-Mesh/shopware-publisher).
+Its current interface is an alpha. Pin the exact alpha reference and review
+changes before updating it.
 
 ## Requirements
 
@@ -22,8 +24,8 @@ The repository must contain:
 - `require.shopware/core` and `require.php` constraints
 - the plugin class configured through `extra.shopware-plugin-class`
 
-The Git tag and `composer.json` version must match. For example, version
-`1.2.0` is published from tag `v1.2.0`.
+The `composer.json` version is the release source of truth. Version `1.2.0`
+creates release tag `v1.2.0`.
 
 ## Minimal workflow
 
@@ -34,39 +36,31 @@ name: Publish extension
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
+    paths:
+      - composer.json
+      - .github/workflows/publish-extension.yml
 
-permissions:
-  contents: write
-  id-token: write
-  attestations: write
+permissions: {}
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          fetch-depth: 0
-
-      - name: Build and publish
-        uses: Extension-Mesh/shopware/.github/actions/publish-shopware@v0.1.0-alpha.3
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    uses: Extension-Mesh/shopware-publisher/.github/workflows/publish.yml@v0.1.0-alpha.1
 ```
 
-Commit the workflow, set the release version in `composer.json`, then create and
-push the matching tag:
+Commit the workflow together with a new version in `composer.json`. The
+workflow creates the matching tag, GitHub Release and registry metadata. It
+also updates the generated `extension-mesh-registry` branch with the current
+registry document. Do not edit that branch or create the release manually.
 
-```bash
-git tag v1.2.0
-git push origin v1.2.0
-```
-
-The workflow creates the GitHub Release and its registry metadata. It also
-updates the generated `extension-mesh-registry` branch with the current
-registry document. Do not edit that branch or create the release manually
-before the workflow runs.
+When adding the workflow to a repository with existing releases, use a new
+plugin version. The publisher does not modify an existing release that lacks
+ExtensionMesh metadata.
 
 ## Connect the repository
 

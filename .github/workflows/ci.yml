@@ -36,33 +36,8 @@ jobs:
 
       - name: Check PHP syntax
         run: |
-          find src .github/actions -name '*.php' -print0 \
+          find src -name '*.php' -print0 \
             | xargs -0 -n1 php -l
-          bash -n .github/actions/publish-shopware/publish-registry.sh
-
-      - name: Validate release archive
-        env:
-          EXTENSION_MESH_OUTPUT: ${{ runner.temp }}/extension-mesh-ci-release
-          EXTENSION_MESH_SKIP_HISTORY: "1"
-        run: |
-          version="$(jq -er '.version' composer.json)"
-          export EXTENSION_MESH_TAG="v${version}"
-          archive="ExtensionMesh-${version}.zip"
-
-          php .github/actions/publish-shopware/build-release.php
-          unzip -t "$EXTENSION_MESH_OUTPUT/$archive"
-          unzip -p "$EXTENSION_MESH_OUTPUT/$archive" \
-            ExtensionMesh/composer.json | jq -e --arg version "$version" \
-            '.version == $version'
-          unzip -Z1 "$EXTENSION_MESH_OUTPUT/$archive" \
-            > "$RUNNER_TEMP/extension-mesh-archive-files"
-          grep -q '^ExtensionMesh/src/Resources/public/administration/.vite/entrypoints.json$' \
-            "$RUNNER_TEMP/extension-mesh-archive-files"
-          EXTENSION_MESH_OUTPUT="$RUNNER_TEMP/extension-mesh-ci-release-repeat" \
-            php .github/actions/publish-shopware/build-release.php
-          cmp \
-            "$EXTENSION_MESH_OUTPUT/$archive" \
-            "$RUNNER_TEMP/extension-mesh-ci-release-repeat/$archive"
 
       - name: Validate development environment
         run: |
