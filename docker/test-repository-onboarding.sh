@@ -2,7 +2,6 @@
 set -eu
 
 seller_api="${SELLER_API_URL:-http://localhost:8082/api}"
-fixture_dir="$(CDPATH= cd -- "$(dirname -- "$0")/registry/public" && pwd)"
 temporary_dir=$(mktemp -d)
 
 cleanup() {
@@ -13,6 +12,13 @@ trap cleanup EXIT
 fail() {
     echo "Repository onboarding test failed: $*" >&2
     exit 1
+}
+
+switch_release_fixture() {
+    release_fixture="$1"
+    docker compose exec -T --user root buyer cp \
+        "/extension-mesh-registry/${release_fixture}" \
+        /var/www/html/custom/plugins/ExtensionMesh/docker/registry/public/github-releases.json
 }
 
 random_id() {
@@ -106,7 +112,7 @@ find_publication() {
     fail "published release ${publication_version} was not found"
 }
 
-cp "${fixture_dir}/github-releases-v1.json" "${fixture_dir}/github-releases.json"
+switch_release_fixture github-releases-v1.json
 
 seller_token=$(token_for "${seller_api}")
 auth_header="Authorization: Bearer ${seller_token}"
@@ -258,7 +264,7 @@ curl -fsS \
     >/dev/null \
     || fail 'publication pagination metadata or page size is invalid'
 
-cp "${fixture_dir}/github-releases-v2.json" "${fixture_dir}/github-releases.json"
+switch_release_fixture github-releases-v2.json
 docker compose exec -T seller \
     bin/console scheduled-task:run-single extension_mesh.repository_sync \
     --no-ansi --no-interaction >/dev/null
