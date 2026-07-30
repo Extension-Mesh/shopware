@@ -1,6 +1,14 @@
 name: Dockware integration
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/dockware-integration.yml
+      - compose.yaml
+      - Makefile
+      - docker/**
   workflow_dispatch:
     inputs:
       dockware_image:
