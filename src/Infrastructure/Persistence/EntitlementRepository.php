@@ -92,6 +92,15 @@ final class EntitlementRepository
     }
 
     /**
+     * @param array{
+     *     search?: string,
+     *     customerId?: list<string>,
+     *     productId?: list<string>,
+     *     salesChannelId?: list<string>,
+     *     status?: list<'enabled'|'disabled'|'expired'>,
+     *     orderLink?: list<'linked'|'standalone'>
+     * } $filters
+     *
      * @return array{
      *     items: list<array<string, mixed>>,
      *     total: int,
@@ -99,10 +108,93 @@ final class EntitlementRepository
      *     limit: int
      * }
      */
-    public function paginate(int $page, int $limit): array
+    public function paginate(int $page, int $limit, array $filters = []): array
     {
+        $from = ' FROM extension_mesh_entitlement entitlement
+                   INNER JOIN customer
+                     ON customer.id = entitlement.customer_id
+                   INNER JOIN product
+                     ON product.id = entitlement.product_id
+                    AND product.version_id = entitlement.product_version_id
+                   INNER JOIN sales_channel
+                     ON sales_channel.id = entitlement.sales_channel_id
+                   LEFT JOIN sales_channel_translation
+                     ON sales_channel_translation.sales_channel_id = sales_channel.id
+                    AND sales_channel_translation.language_id = :systemLanguageId
+                   LEFT JOIN `order` linked_order
+                     ON linked_order.id = entitlement.order_id
+                    AND linked_order.version_id = entitlement.order_version_id';
+        $where = [];
+        $parameters = [
+            'systemLanguageId' => Uuid::fromHexToBytes(Defaults::LANGUAGE_SYSTEM),
+        ];
+        $types = [];
+
+        $search = \trim($filters['search'] ?? '');
+        if ($search !== '') {
+            $where[] = '(customer.customer_number LIKE :search
+                OR customer.first_name LIKE :search
+                OR customer.last_name LIKE :search
+                OR customer.email LIKE :search
+                OR product.product_number LIKE :search
+                OR sales_channel_translation.name LIKE :search
+                OR linked_order.order_number LIKE :search)';
+            $parameters['search'] = '%' . $search . '%';
+        }
+
+        foreach ([
+            'customerId' => 'entitlement.customer_id',
+            'productId' => 'entitlement.product_id',
+            'salesChannelId' => 'entitlement.sales_channel_id',
+        ] as $filter => $column) {
+            $values = $filters[$filter] ?? null;
+            if (!\is_array($values) || $values === []) {
+                continue;
+            }
+
+            $invalidValues = \array_filter(
+                $values,
+                static fn (string $value): bool => !Uuid::isValid($value)
+            );
+            if ($invalidValues !== []) {
+                $where[] = '1 = 0';
+                continue;
+            }
+
+            $where[] = $column . ' IN (:' . $filter . ')';
+            $parameters[$filter] = \array_map(Uuid::fromHexToBytes(...), $values);
+            $types[$filter] = ArrayParameterType::BINARY;
+        }
+
+        $statusClauses = [];
+        foreach ($filters['status'] ?? [] as $status) {
+            match ($status) {
+                'enabled' => $statusClauses[] = '(entitlement.enabled = 1
+                AND (
+                    entitlement.valid_until IS NULL
+                    OR entitlement.valid_until > UTC_TIMESTAMP(3)
+                ))',
+                'disabled' => $statusClauses[] = 'entitlement.enabled = 0',
+                'expired' => $statusClauses[] = '(entitlement.enabled = 1
+                    AND entitlement.valid_until <= UTC_TIMESTAMP(3))',
+            };
+        }
+        if ($statusClauses !== [] && \count($statusClauses) < 3) {
+            $where[] = '(' . \implode(' OR ', $statusClauses) . ')';
+        }
+
+        $orderLinks = $filters['orderLink'] ?? [];
+        if (\count($orderLinks) === 1) {
+            $where[] = $orderLinks[0] === 'linked'
+                ? 'entitlement.order_id IS NOT NULL'
+                : 'entitlement.order_id IS NULL';
+        }
+
+        $whereSql = $where === [] ? '' : ' WHERE ' . \implode(' AND ', $where);
         $total = (int) $this->connection->fetchOne(
-            'SELECT COUNT(*) FROM extension_mesh_entitlement'
+            'SELECT COUNT(*)' . $from . $whereSql,
+            $parameters,
+            $types
         );
         $page = \min($page, \max(1, (int) \ceil($total / $limit)));
         $rows = $this->connection->fetchAllAssociative(
@@ -114,28 +206,15 @@ final class EntitlementRepository
                     product.product_number,
                     sales_channel_translation.name AS sales_channel_name,
                     linked_order.order_number
-               FROM extension_mesh_entitlement entitlement
-               INNER JOIN customer
-                 ON customer.id = entitlement.customer_id
-               INNER JOIN product
-                 ON product.id = entitlement.product_id
-                AND product.version_id = entitlement.product_version_id
-               INNER JOIN sales_channel
-                 ON sales_channel.id = entitlement.sales_channel_id
-               LEFT JOIN sales_channel_translation
-                 ON sales_channel_translation.sales_channel_id = sales_channel.id
-                AND sales_channel_translation.language_id = :systemLanguageId
-               LEFT JOIN `order` linked_order
-                 ON linked_order.id = entitlement.order_id
-                AND linked_order.version_id = entitlement.order_version_id
-              ORDER BY entitlement.created_at DESC, entitlement.id
-              LIMIT :limit OFFSET :offset',
-            [
+               ' . $from . $whereSql . '
+               ORDER BY entitlement.created_at DESC, entitlement.id
+               LIMIT :limit OFFSET :offset',
+            \array_merge($parameters, [
                 'limit' => $limit,
                 'offset' => ($page - 1) * $limit,
-                'systemLanguageId' => Uuid::fromHexToBytes(Defaults::LANGUAGE_SYSTEM),
-            ],
+            ]),
             [
+                ...$types,
                 'limit' => ParameterType::INTEGER,
                 'offset' => ParameterType::INTEGER,
             ]
@@ -580,6 +659,8 @@ final class EntitlementRepository
             'id' => Uuid::fromBytesToHex((string) $row['id']),
             'customerId' => Uuid::fromBytesToHex((string) $row['customer_id']),
             'customerNumber' => (string) ($row['customer_number'] ?? ''),
+            'customerFirstName' => (string) ($row['first_name'] ?? ''),
+            'customerLastName' => (string) ($row['last_name'] ?? ''),
             'customerName' => $customerName,
             'customerEmail' => (string) ($row['email'] ?? ''),
             'productId' => Uuid::fromBytesToHex((string) $row['product_id']),

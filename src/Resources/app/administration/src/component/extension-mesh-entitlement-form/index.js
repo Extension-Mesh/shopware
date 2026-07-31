@@ -36,16 +36,31 @@ Component.register('extension-mesh-entitlement-form', {
             return criteria;
         },
 
-        productCriteriaFilters() {
+        selectableProductIds() {
             return [
-                Criteria.multi('OR', [
-                    Criteria.equals('childCount', 0),
-                    Criteria.equals('childCount', null),
-                ]),
+                ...new Set([
+                    ...this.eligibleProductIds,
+                    this.form.productId,
+                ].filter(Boolean)),
+            ];
+        },
+
+        productCriteriaFilters() {
+            const selectableProductFilters = [
+                Criteria.equals('childCount', 0),
+                Criteria.equals('childCount', null),
+            ];
+
+            if (this.form.productId) {
+                selectableProductFilters.push(Criteria.equals('id', this.form.productId));
+            }
+
+            return [
+                Criteria.multi('OR', selectableProductFilters),
                 Criteria.equalsAny(
                     'id',
-                    this.eligibleProductIds.length
-                        ? this.eligibleProductIds
+                    this.selectableProductIds.length
+                        ? this.selectableProductIds
                         : ['00000000000000000000000000000000'],
                 ),
             ];
@@ -54,7 +69,6 @@ Component.register('extension-mesh-entitlement-form', {
         productCriteria() {
             const criteria = new Criteria(1, 25);
             criteria.addAssociation('options.group');
-            criteria.addAssociation('parent');
             this.productCriteriaFilters.forEach((filter) => criteria.addFilter(filter));
             criteria.setTotalCountMode(0);
 

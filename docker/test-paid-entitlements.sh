@@ -313,6 +313,115 @@ if [ -n "${registered_context}" ]; then
 fi
 customer_id=$(jq -er '.id' "${temporary_dir}/registration.json")
 
+manual_smoke_payload=$(jq -nc \
+    --arg customerId "${customer_id}" \
+    --arg productId "${product_id}" \
+    --arg salesChannelId "${sales_channel_id}" \
+    '{
+        customerId: $customerId,
+        productId: $productId,
+        salesChannelId: $salesChannelId,
+        orderId: null,
+        enabled: true
+    }')
+expect_status 201 "${temporary_dir}/manual-smoke-create.json" \
+    -X POST "${seller_api}/_action/extension-mesh/entitlements" \
+    -H "Authorization: Bearer ${seller_admin_token}" \
+    -H 'Content-Type: application/json' \
+    --data "${manual_smoke_payload}"
+manual_smoke_id=$(jq -er '.data.id' "${temporary_dir}/manual-smoke-create.json")
+jq -e '.data.orderId == null
+    and .data.enabled == true
+    and .data.expired == false' \
+    "${temporary_dir}/manual-smoke-create.json" >/dev/null \
+    || fail 'the isolated manual entitlement was not created as a standalone grant'
+
+expect_status 200 "${temporary_dir}/manual-smoke-detail.json" \
+    "${seller_api}/_action/extension-mesh/entitlements/${manual_smoke_id}" \
+    -H "Authorization: Bearer ${seller_admin_token}"
+jq -e '.data.id == "'"${manual_smoke_id}"'"
+    and .data.customerId == "'"${customer_id}"'"
+    and .data.customerNumber != ""
+    and .data.customerFirstName == "Paid"
+    and .data.customerLastName == "Fixture"
+    and .data.customerEmail == "'"${buyer_email}"'"
+    and .data.productId == "'"${product_id}"'"
+    and .data.productNumber != ""
+    and .data.salesChannelId == "'"${sales_channel_id}"'"
+    and .data.orderId == null' \
+    "${temporary_dir}/manual-smoke-detail.json" >/dev/null \
+    || fail 'the manual entitlement detail did not expose useful customer and product data'
+
+expect_status 200 "${temporary_dir}/manual-smoke-filtered-list.json" \
+    -G "${seller_api}/_action/extension-mesh/entitlements" \
+    -H "Authorization: Bearer ${seller_admin_token}" \
+    --data-urlencode 'page=1' \
+    --data-urlencode 'limit=25' \
+    --data-urlencode "search=${buyer_email}" \
+    --data-urlencode "customerId=${customer_id}" \
+    --data-urlencode "productId=${product_id}" \
+    --data-urlencode "salesChannelId=${sales_channel_id}" \
+    --data-urlencode 'status=enabled' \
+    --data-urlencode 'orderLink=standalone'
+jq -e '.total == 1
+    and (.data | length) == 1
+    and .data[0].id == "'"${manual_smoke_id}"'"' \
+    "${temporary_dir}/manual-smoke-filtered-list.json" >/dev/null \
+    || fail 'the manual entitlement was not returned by the listing filters'
+
+expect_status 200 "${temporary_dir}/manual-smoke-access.json" \
+    "${seller_storefront}/store-api/extension-mesh/access" \
+    -H "sw-access-key: ${sales_channel_access_key}" \
+    -H "sw-context-token: ${context_token}"
+manual_smoke_token=$(jq -er '.accessToken' "${temporary_dir}/manual-smoke-access.json")
+expect_status 200 "${temporary_dir}/manual-smoke-registry.json" \
+    "${seller_storefront}/extension-mesh/v1/registry" \
+    -H "Authorization: Bearer ${manual_smoke_token}"
+jq -e '.extensions[] | select(
+    .name == "AcmeDemoPlugin"
+    and (.releases | length) == 1
+)' "${temporary_dir}/manual-smoke-registry.json" >/dev/null \
+    || fail 'a standalone manual entitlement did not grant update access'
+
+manual_smoke_disabled_payload=$(printf '%s' "${manual_smoke_payload}" \
+    | jq '.enabled = false')
+expect_status 200 "${temporary_dir}/manual-smoke-disable.json" \
+    -X PUT "${seller_api}/_action/extension-mesh/entitlements/${manual_smoke_id}" \
+    -H "Authorization: Bearer ${seller_admin_token}" \
+    -H 'Content-Type: application/json' \
+    --data "${manual_smoke_disabled_payload}"
+expect_status 200 "${temporary_dir}/manual-smoke-disabled-registry.json" \
+    "${seller_storefront}/extension-mesh/v1/registry" \
+    -H "Authorization: Bearer ${manual_smoke_token}"
+jq -e '.extensions | length == 0' \
+    "${temporary_dir}/manual-smoke-disabled-registry.json" >/dev/null \
+    || fail 'disabling a standalone manual entitlement did not revoke update access'
+
+expect_status 200 "${temporary_dir}/manual-smoke-re-enable.json" \
+    -X PUT "${seller_api}/_action/extension-mesh/entitlements/${manual_smoke_id}" \
+    -H "Authorization: Bearer ${seller_admin_token}" \
+    -H 'Content-Type: application/json' \
+    --data "${manual_smoke_payload}"
+expect_status 200 "${temporary_dir}/manual-smoke-re-enabled-registry.json" \
+    "${seller_storefront}/extension-mesh/v1/registry" \
+    -H "Authorization: Bearer ${manual_smoke_token}"
+jq -e '.extensions | length == 1' \
+    "${temporary_dir}/manual-smoke-re-enabled-registry.json" >/dev/null \
+    || fail 're-enabling a standalone manual entitlement did not restore update access'
+
+expect_status 204 "${temporary_dir}/manual-smoke-delete.json" \
+    -X DELETE "${seller_api}/_action/extension-mesh/entitlements/${manual_smoke_id}" \
+    -H "Authorization: Bearer ${seller_admin_token}"
+expect_status 404 "${temporary_dir}/manual-smoke-deleted-detail.json" \
+    "${seller_api}/_action/extension-mesh/entitlements/${manual_smoke_id}" \
+    -H "Authorization: Bearer ${seller_admin_token}"
+expect_status 200 "${temporary_dir}/manual-smoke-deleted-registry.json" \
+    "${seller_storefront}/extension-mesh/v1/registry" \
+    -H "Authorization: Bearer ${manual_smoke_token}"
+jq -e '.extensions | length == 0' \
+    "${temporary_dir}/manual-smoke-deleted-registry.json" >/dev/null \
+    || fail 'deleting a standalone manual entitlement did not revoke update access'
+
 expect_status 200 "${temporary_dir}/cart.json" \
     -X POST "${seller_storefront}/store-api/checkout/cart/line-item" \
     -H "sw-access-key: ${sales_channel_access_key}" \
@@ -576,4 +685,4 @@ expect_status 204 "${temporary_dir}/delete-automatic-entitlement.json" \
     -X DELETE "${seller_api}/_action/extension-mesh/entitlements/${automatic_entitlement_id}" \
     -H "Authorization: Bearer ${seller_admin_token}"
 
-echo "Paid entitlement test passed: perpetual-by-default automatic issuance, parallel standalone grants, optional order linkage, authenticated update, rotation, refund revocation and seller override."
+echo "Paid entitlement test passed: isolated standalone manual CRUD/access, filtered listing, perpetual automatic issuance, parallel grants, optional order linkage, rotation, refund revocation and seller override."

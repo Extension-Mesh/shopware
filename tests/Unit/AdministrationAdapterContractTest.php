@@ -150,7 +150,17 @@ final class AdministrationAdapterContractTest extends TestCase
         self::assertStringContainsString('<sw-page', $entitlementList);
         self::assertStringContainsString('sw-data-grid', $entitlementList);
         self::assertStringContainsString(':full-page="true"', $entitlementList);
+        self::assertStringContainsString('<sw-search-bar', $entitlementList);
+        self::assertStringContainsString('<sw-sidebar-filter-panel', $entitlementList);
+        self::assertStringNotContainsString('<sw-sidebar-collapse', $entitlementList);
+        self::assertStringContainsString('#column-customerNumber', $entitlementList);
+        self::assertStringContainsString('#column-customerEmail', $entitlementList);
+        self::assertStringContainsString('@criteria-changed="updateCriteria"', $entitlementList);
         self::assertStringContainsString('deleteEntitlement', $entitlementListComponent);
+        self::assertStringContainsString("property: 'customerNumber'", $entitlementListComponent);
+        self::assertStringContainsString("property: 'customerEmail'", $entitlementListComponent);
+        self::assertStringContainsString('listFilters()', $entitlementListComponent);
+        self::assertStringContainsString('activeFilters()', $entitlementListComponent);
         self::assertStringContainsString('<sw-page', $entitlementCreate);
         self::assertStringContainsString('<sw-card-view', $entitlementCreate);
         self::assertStringContainsString('<sw-button-process', $entitlementCreate);
@@ -177,6 +187,16 @@ final class AdministrationAdapterContractTest extends TestCase
         self::assertStringContainsString('<mt-datepicker', $entitlementForm);
         self::assertStringContainsString('Criteria.equalsAny', $entitlementFormComponent);
         self::assertStringContainsString("Criteria.equals('childCount', 0)", $entitlementFormComponent);
+        self::assertStringContainsString('selectableProductIds()', $entitlementFormComponent);
+        self::assertStringContainsString('this.form.productId', $entitlementFormComponent);
+        self::assertStringContainsString(
+            "criteria.addAssociation('options.group')",
+            $entitlementFormComponent
+        );
+        self::assertStringNotContainsString(
+            "criteria.addAssociation('parent')",
+            $entitlementFormComponent
+        );
         self::assertStringContainsString('position: absolute', $entitlementListStyles);
         self::assertStringContainsString(':has(.mt-empty-state)', $entitlementListStyles);
         $downloadForm = \file_get_contents(

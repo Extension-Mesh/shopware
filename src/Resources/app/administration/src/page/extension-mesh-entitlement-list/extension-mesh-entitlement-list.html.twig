@@ -1,4 +1,12 @@
 <sw-page class="extension-mesh-entitlement-list">
+    <template #search-bar>
+        <sw-search-bar
+            :initial-search="term"
+            :placeholder="$t('extension-mesh.entitlements.searchPlaceholder')"
+            @search="onSearch"
+        />
+    </template>
+
     <template #smart-bar-header>
         <h2>
             {{ $t('extension-mesh.entitlements.title') }}
@@ -27,8 +35,12 @@
                 v-if="!isLoading && !total"
                 :centered="true"
                 :icon="$route.meta.$module.icon"
-                :headline="$t('extension-mesh.entitlements.empty')"
-                :description="$t('extension-mesh.entitlements.explanation')"
+                :headline="hasActiveQuery
+                    ? $t('extension-mesh.entitlements.noResults')
+                    : $t('extension-mesh.entitlements.empty')"
+                :description="hasActiveQuery
+                    ? $t('extension-mesh.entitlements.noResultsHelp')
+                    : $t('extension-mesh.entitlements.explanation')"
             />
 
             <sw-data-grid
@@ -46,11 +58,18 @@
             >
                 <template #column-customerName="{ item }">
                     <router-link
-                        :to="{ name: 'extension.mesh.entitlement.detail', params: { id: item.id } }"
+                        :to="{ name: 'sw.customer.detail', params: { id: item.customerId } }"
                     >
-                        {{ item.customerName || item.customerEmail }}
+                        {{ item.customerLastName }}, {{ item.customerFirstName }}
                     </router-link>
-                    <small>{{ item.customerNumber }} · {{ item.customerEmail }}</small>
+                </template>
+
+                <template #column-customerNumber="{ item }">
+                    {{ item.customerNumber }}
+                </template>
+
+                <template #column-customerEmail="{ item }">
+                    {{ item.customerEmail }}
                 </template>
 
                 <template #column-productNumber="{ item }">
@@ -87,6 +106,10 @@
                     {{ item.validUntil
                         ? formatDate(item.validUntil)
                         : $t('extension-mesh.entitlements.noExpiration') }}
+                </template>
+
+                <template #column-createdAt="{ item }">
+                    <sw-time-ago :date="item.createdAt" />
                 </template>
 
                 <template #actions="{ item }">
@@ -126,6 +149,14 @@
                 icon="regular-undo"
                 :title="$t('extension-mesh.entitlements.refresh')"
                 @click="loadEntitlements"
+            />
+
+            <sw-sidebar-filter-panel
+                :store-key="storeKey"
+                :filters="listFilters"
+                :defaults="defaultFilters"
+                :active-filter-number="activeFilterNumber"
+                @criteria-changed="updateCriteria"
             />
         </sw-sidebar>
     </template>

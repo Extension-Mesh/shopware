@@ -44,6 +44,24 @@ final class EntitlementPersistenceContractTest extends TestCase
         self::assertStringContainsString('`valid_until` DATETIME(3) NULL', $migration);
         self::assertStringContainsString('valid_until IS NULL', $repository);
         self::assertStringContainsString('valid_until > UTC_TIMESTAMP(3)', $repository);
+        self::assertStringContainsString('customer.customer_number LIKE :search', $repository);
+        self::assertStringContainsString(
+            "'customerId' => 'entitlement.customer_id'",
+            $repository
+        );
+        self::assertStringContainsString(
+            "'productId' => 'entitlement.product_id'",
+            $repository
+        );
+        self::assertStringContainsString(
+            "'salesChannelId' => 'entitlement.sales_channel_id'",
+            $repository
+        );
+        self::assertStringContainsString('entitlement.order_id IS NULL', $repository);
+        self::assertStringContainsString('entitlement.order_id IS NOT NULL', $repository);
+        self::assertStringContainsString("'customerFirstName'", $repository);
+        self::assertStringContainsString("'customerLastName'", $repository);
+        self::assertStringContainsString("'orderLink'", $controller);
         self::assertStringContainsString(
             'ExtensionMesh.config.orderEntitlementValidityDays',
             $repository

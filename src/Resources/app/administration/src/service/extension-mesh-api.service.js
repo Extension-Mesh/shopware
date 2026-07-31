@@ -56,10 +56,10 @@ class ExtensionMeshApiService extends ApiService {
         );
     }
 
-    getEntitlements(page = 1, limit = 25) {
+    getEntitlements(page = 1, limit = 25, filters = {}) {
         return this.httpClient
             .get('_action/extension-mesh/entitlements', {
-                params: { page, limit },
+                params: { page, limit, ...filters },
                 headers: this.getBasicHeaders(),
             })
             .then((response) => response.data);

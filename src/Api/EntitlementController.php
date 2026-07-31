@@ -30,7 +30,41 @@ final class EntitlementController
     {
         $page = \max(1, $request->query->getInt('page', 1));
         $limit = \min(100, \max(1, $request->query->getInt('limit', 25)));
-        $result = $this->entitlements->paginate($page, $limit);
+        $filters = [];
+        $query = $request->query->all();
+        $search = $query['search'] ?? null;
+        if (\is_string($search) && $search !== '') {
+            $filters['search'] = $search;
+        }
+
+        foreach (['customerId', 'productId', 'salesChannelId'] as $filter) {
+            $values = $this->queryValues($query[$filter] ?? null);
+            if ($values !== []) {
+                $filters[$filter] = $values;
+            }
+        }
+
+        $statuses = [];
+        foreach ($this->queryValues($query['status'] ?? null) as $status) {
+            if ($status === 'enabled' || $status === 'disabled' || $status === 'expired') {
+                $statuses[] = $status;
+            }
+        }
+        if ($statuses !== []) {
+            $filters['status'] = $statuses;
+        }
+
+        $orderLinks = [];
+        foreach ($this->queryValues($query['orderLink'] ?? null) as $orderLink) {
+            if ($orderLink === 'linked' || $orderLink === 'standalone') {
+                $orderLinks[] = $orderLink;
+            }
+        }
+        if ($orderLinks !== []) {
+            $filters['orderLink'] = $orderLinks;
+        }
+
+        $result = $this->entitlements->paginate($page, $limit, $filters);
 
         return new JsonResponse([
             'data' => $result['items'],
@@ -212,5 +246,23 @@ final class EntitlementController
                 'detail' => $detail,
             ]],
         ], $status);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function queryValues(mixed $value): array
+    {
+        if (\is_string($value)) {
+            return $value === '' ? [] : [$value];
+        }
+        if (!\is_array($value)) {
+            return [];
+        }
+
+        return \array_values(\array_filter(
+            $value,
+            static fn (mixed $item): bool => \is_string($item) && $item !== ''
+        ));
     }
 }
