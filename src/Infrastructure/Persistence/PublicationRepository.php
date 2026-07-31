@@ -2,136 +2,93 @@
 
 namespace ExtensionMesh\Shopware\Infrastructure\Persistence;
 
-use Doctrine\DBAL\ArrayParameterType;
-use Doctrine\DBAL\Connection;
-use Doctrine\DBAL\ParameterType;
+use ExtensionMesh\Shopware\Core\Content\PublishedRelease\PublishedReleaseEntity;
+use ExtensionMesh\Shopware\Core\Content\PublishedRelease\PublishedReleaseCollection;
+use ExtensionMesh\Shopware\Core\Content\RepositoryRelease\RepositoryReleaseCollection;
+use ExtensionMesh\Shopware\Core\Content\RepositoryRelease\RepositoryReleaseEntity;
+use Shopware\Core\Content\Product\Aggregate\ProductDownload\ProductDownloadCollection;
+use Shopware\Core\Content\Product\Aggregate\ProductDownload\ProductDownloadEntity;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsAnyFilter;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\NotFilter;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Sorting\FieldSorting;
 use Shopware\Core\Framework\Uuid\Uuid;
 
-final class PublicationRepository
+final class PublicationRepository implements PublicationReader
 {
-    public function __construct(private readonly Connection $connection)
-    {
+    public function __construct(
+        /** @var EntityRepository<PublishedReleaseCollection> */
+        private readonly EntityRepository $releases,
+        /** @var EntityRepository<ProductDownloadCollection> */
+        private readonly EntityRepository $productDownloads,
+        /** @var EntityRepository<RepositoryReleaseCollection> */
+        private readonly EntityRepository $repositoryReleases,
+        private readonly EntitlementRepository $entitlements
+    ) {
     }
 
-    /**
-     * @return list<array{
-     *     downloadId: string,
-     *     productId: string,
-     *     mediaId: string,
-     *     fileName: string,
-     *     fileExtension: string,
-     *     fileSize: int,
-     *     releaseNotes: ?string,
-     *     fingerprint: string
-     * }>
-     */
-    public function digitalProductDownloads(int $offset = 0, int $limit = 100): array
+    /** @return list<array<string, mixed>> */
+    public function digitalProductDownloads(int $offset, int $limit, Context $context): array
     {
-        $rows = $this->connection->fetchAllAssociative(
-            'SELECT pd.id AS download_id,
-                    pd.product_id,
-                    pd.media_id,
-                    m.file_name,
-                    m.file_extension,
-                    m.file_size,
-                    repository_release.release_notes,
-                    pd.created_at AS download_created_at,
-                    pd.updated_at AS download_updated_at,
-                    m.created_at AS media_created_at,
-                    m.updated_at AS media_updated_at
-               FROM product_download pd
-               INNER JOIN media m ON m.id = pd.media_id
-               LEFT JOIN extension_mesh_repository_release repository_release
-                 ON repository_release.product_download_id = pd.id
-              WHERE pd.version_id = :liveVersion
-                AND pd.product_version_id = :liveVersion
-                AND (
-                    EXISTS (
-                        SELECT 1
-                          FROM extension_mesh_repository_connection connection
-                         WHERE connection.product_id = pd.product_id
-                           AND connection.enabled = 1
-                    )
-                    OR EXISTS (
-                        SELECT 1
-                          FROM extension_mesh_product integrated
-                         WHERE integrated.product_id = pd.product_id
-                           AND integrated.enabled = 1
-                    )
-                )
-              ORDER BY pd.product_id, pd.position, pd.created_at, pd.id
-              LIMIT :limit OFFSET :offset',
-            [
-                'liveVersion' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
-                'limit' => $limit,
-                'offset' => $offset,
-            ],
-            [
-                'limit' => ParameterType::INTEGER,
-                'offset' => ParameterType::INTEGER,
-            ]
-        );
+        $eligibleProductIds = $this->entitlements->eligibleProductIds($context);
+        if ($eligibleProductIds === []) {
+            return [];
+        }
+        $criteria = (new Criteria())
+            ->addAssociation('media')
+            ->addFilter(new EqualsAnyFilter('productId', $eligibleProductIds))
+            ->addFilter(new EqualsFilter('versionId', Defaults::LIVE_VERSION))
+            ->addFilter(new EqualsFilter('productVersionId', Defaults::LIVE_VERSION))
+            ->addSorting(new FieldSorting('productId'))
+            ->addSorting(new FieldSorting('position'))
+            ->addSorting(new FieldSorting('createdAt'))
+            ->addSorting(new FieldSorting('id'))
+            ->setOffset($offset)
+            ->setLimit($limit);
+        $downloads = $this->productDownloads->search($criteria, $context);
 
-        return \array_map(static function (array $row): array {
+        $releaseNotes = [];
+        $downloadIds = $downloads->getIds();
+        if ($downloadIds !== []) {
+            $releaseCriteria = (new Criteria())
+                ->addFilter(new EqualsAnyFilter('productDownloadId', $downloadIds));
+            $repositoryReleases = $this->repositoryReleases->search($releaseCriteria, $context);
+            foreach ($repositoryReleases as $entity) {
+                $releaseNotes[$entity->getProductDownloadId()] = $entity->getReleaseNotes();
+            }
+        }
+
+        $rows = [];
+        foreach ($downloads as $download) {
+            if ($download->getMedia() === null) {
+                continue;
+            }
+            $media = $download->getMedia();
+            $notes = $releaseNotes[$download->getId()] ?? null;
             $fingerprintData = [
-                Uuid::fromBytesToHex((string) $row['media_id']),
-                (string) ($row['file_size'] ?? 0),
-                (string) ($row['download_updated_at'] ?? $row['download_created_at'] ?? ''),
-                (string) ($row['media_updated_at'] ?? $row['media_created_at'] ?? ''),
-                (string) ($row['release_notes'] ?? ''),
+                $download->getMediaId(),
+                (string) ($media->getFileSize() ?? 0),
+                ($download->getUpdatedAt() ?? $download->getCreatedAt())?->format(Defaults::STORAGE_DATE_TIME_FORMAT) ?? '',
+                ($media->getUpdatedAt() ?? $media->getCreatedAt())?->format(Defaults::STORAGE_DATE_TIME_FORMAT) ?? '',
+                \is_string($notes) ? $notes : '',
             ];
-
-            return [
-                'downloadId' => Uuid::fromBytesToHex((string) $row['download_id']),
-                'productId' => Uuid::fromBytesToHex((string) $row['product_id']),
-                'mediaId' => Uuid::fromBytesToHex((string) $row['media_id']),
-                'fileName' => (string) ($row['file_name'] ?? ''),
-                'fileExtension' => \strtolower((string) ($row['file_extension'] ?? '')),
-                'fileSize' => (int) ($row['file_size'] ?? 0),
-                'releaseNotes' => \is_string($row['release_notes'] ?? null)
-                    ? $row['release_notes']
-                    : null,
+            $rows[] = [
+                'downloadId' => $download->getId(),
+                'productId' => $download->getProductId(),
+                'mediaId' => $download->getMediaId(),
+                'fileName' => $media->getFileName() ?? '',
+                'fileExtension' => \strtolower($media->getFileExtension() ?? ''),
+                'fileSize' => $media->getFileSize() ?? 0,
+                'releaseNotes' => \is_string($notes) ? $notes : null,
                 'fingerprint' => \hash('sha256', \implode("\0", $fingerprintData)),
             ];
-        }, $rows);
-    }
+        }
 
-    /**
-     * @return array{
-     *     items: list<array<string, mixed>>,
-     *     total: int,
-     *     page: int,
-     *     limit: int
-     * }
-     */
-    public function paginate(int $page, int $limit): array
-    {
-        $total = (int) $this->connection->fetchOne(
-            'SELECT COUNT(*) FROM extension_mesh_published_release'
-        );
-        $page = \min($page, \max(1, (int) \ceil($total / $limit)));
-        $rows = $this->connection->fetchAllAssociative(
-            'SELECT *
-               FROM extension_mesh_published_release
-              ORDER BY created_at, id
-              LIMIT :limit OFFSET :offset',
-            [
-                'limit' => $limit,
-                'offset' => ($page - 1) * $limit,
-            ],
-            [
-                'limit' => ParameterType::INTEGER,
-                'offset' => ParameterType::INTEGER,
-            ]
-        );
-
-        return [
-            'items' => \array_map($this->hydrate(...), $rows),
-            'total' => $total,
-            'page' => $page,
-            'limit' => $limit,
-        ];
+        return $rows;
     }
 
     /**
@@ -139,25 +96,9 @@ final class PublicationRepository
      *
      * @return array<string, array<string, mixed>>
      */
-    public function byDownloadIds(array $downloadIds): array
+    public function byDownloadIds(array $downloadIds, Context $context): array
     {
-        if ($downloadIds === []) {
-            return [];
-        }
-
-        $rows = $this->connection->fetchAllAssociative(
-            'SELECT *
-               FROM extension_mesh_published_release
-              WHERE product_download_id IN (:downloadIds)',
-            ['downloadIds' => \array_map(Uuid::fromHexToBytes(...), $downloadIds)],
-            ['downloadIds' => ArrayParameterType::BINARY]
-        );
-        $releases = [];
-        foreach ($rows as $row) {
-            $releases[Uuid::fromBytesToHex((string) $row['product_download_id'])] = $this->hydrate($row);
-        }
-
-        return $releases;
+        return $this->keyedBy('productDownloadId', $downloadIds, $context);
     }
 
     /**
@@ -165,63 +106,23 @@ final class PublicationRepository
      *
      * @return array<string, array<string, mixed>>
      */
-    public function byMediaIds(array $mediaIds): array
+    public function byMediaIds(array $mediaIds, Context $context): array
     {
-        if ($mediaIds === []) {
-            return [];
-        }
-
-        $rows = $this->connection->fetchAllAssociative(
-            'SELECT pr.*
-               FROM extension_mesh_published_release pr
-              WHERE pr.media_id IN (:mediaIds)
-                AND pr.validation_error IS NULL
-                AND pr.metadata IS NOT NULL
-                AND pr.sha256 IS NOT NULL
-                AND (
-                    EXISTS (
-                        SELECT 1
-                          FROM extension_mesh_repository_connection connection
-                         WHERE connection.product_id = pr.product_id
-                           AND connection.enabled = 1
-                    )
-                    OR EXISTS (
-                        SELECT 1
-                          FROM extension_mesh_product integrated
-                         WHERE integrated.product_id = pr.product_id
-                           AND integrated.enabled = 1
-                    )
-                )',
-            ['mediaIds' => \array_map(Uuid::fromHexToBytes(...), $mediaIds)],
-            ['mediaIds' => ArrayParameterType::BINARY]
-        );
-        $releases = [];
-        foreach ($rows as $row) {
-            $releases[Uuid::fromBytesToHex((string) $row['media_id'])] = $this->hydrate($row);
-        }
-
-        return $releases;
+        return $this->keyedBy('mediaId', $mediaIds, $context, true);
     }
 
-    /**
-     * @return array<string, mixed>|null
-     */
-    public function get(string $id): ?array
+    /** @return array<string, mixed>|null */
+    public function get(string $id, Context $context): ?array
     {
         if (!Uuid::isValid($id)) {
             return null;
         }
-        $row = $this->connection->fetchAssociative(
-            'SELECT * FROM extension_mesh_published_release WHERE id = :id',
-            ['id' => Uuid::fromHexToBytes($id)]
-        );
+        $entity = $this->releases->search(new Criteria([$id]), $context)->first();
 
-        return $row === false ? null : $this->hydrate($row);
+        return $entity instanceof PublishedReleaseEntity ? $this->hydrate($entity) : null;
     }
 
-    /**
-     * @param array<string, mixed>|null $metadata
-     */
+    /** @param array<string, mixed>|null $metadata */
     public function save(
         string $downloadId,
         string $productId,
@@ -229,92 +130,53 @@ final class PublicationRepository
         string $fingerprint,
         ?array $metadata,
         ?string $sha256,
-        ?string $validationError
+        ?string $validationError,
+        Context $context
     ): void {
-        $now = (new \DateTimeImmutable())->format('Y-m-d H:i:s.v');
-        $this->connection->executeStatement(
-            <<<'SQL'
-                INSERT INTO extension_mesh_published_release (
-                    id,
-                    product_download_id,
-                    product_id,
-                    media_id,
-                    fingerprint,
-                    technical_name,
-                    version,
-                    metadata,
-                    sha256,
-                    validation_error,
-                    created_at,
-                    updated_at
-                ) VALUES (
-                    :id,
-                    :downloadId,
-                    :productId,
-                    :mediaId,
-                    :fingerprint,
-                    :technicalName,
-                    :version,
-                    :metadata,
-                    :sha256,
-                    :validationError,
-                    :createdAt,
-                    :updatedAt
-                )
-                ON DUPLICATE KEY UPDATE
-                    product_id = VALUES(product_id),
-                    media_id = VALUES(media_id),
-                    fingerprint = VALUES(fingerprint),
-                    technical_name = VALUES(technical_name),
-                    version = VALUES(version),
-                    metadata = VALUES(metadata),
-                    sha256 = VALUES(sha256),
-                    validation_error = VALUES(validation_error),
-                    updated_at = VALUES(updated_at)
-                SQL,
-            [
-                'id' => Uuid::fromHexToBytes(Uuid::randomHex()),
-                'downloadId' => Uuid::fromHexToBytes($downloadId),
-                'productId' => Uuid::fromHexToBytes($productId),
-                'mediaId' => Uuid::fromHexToBytes($mediaId),
-                'fingerprint' => $fingerprint,
-                'technicalName' => $metadata['name'] ?? null,
-                'version' => $metadata['version'] ?? null,
-                'metadata' => $metadata === null ? null : \json_encode($metadata, \JSON_THROW_ON_ERROR),
-                'sha256' => $sha256,
-                'validationError' => $validationError,
-                'createdAt' => $now,
-                'updatedAt' => $now,
-            ]
-        );
+        $criteria = (new Criteria())
+            ->addFilter(new EqualsFilter('productDownloadId', $downloadId))
+            ->setLimit(1);
+        $existingId = $this->releases->searchIds($criteria, $context)->firstId();
+        $this->releases->upsert([[
+            'id' => $existingId ?? Uuid::randomHex(),
+            'productDownloadId' => $downloadId,
+            'productDownloadVersionId' => Defaults::LIVE_VERSION,
+            'productId' => $productId,
+            'productVersionId' => Defaults::LIVE_VERSION,
+            'mediaId' => $mediaId,
+            'fingerprint' => $fingerprint,
+            'technicalName' => $metadata['name'] ?? null,
+            'version' => $metadata['version'] ?? null,
+            'metadata' => $metadata,
+            'sha256' => $sha256,
+            'validationError' => $validationError,
+        ]], $context);
     }
 
-    public function removeMissingDownloads(): void
+    public function removeMissingDownloads(Context $context): void
     {
-        $this->connection->executeStatement(
-            'DELETE pr
-               FROM extension_mesh_published_release pr
-              LEFT JOIN product_download pd
-                 ON pd.id = pr.product_download_id
-                AND pd.version_id = :liveVersion
-                AND pd.product_version_id = :liveVersion
-              WHERE pd.id IS NULL
-                 OR NOT (
-                    EXISTS (
-                        SELECT 1
-                          FROM extension_mesh_repository_connection connection
-                         WHERE connection.product_id = pr.product_id
-                           AND connection.enabled = 1
-                    )
-                    OR EXISTS (
-                        SELECT 1
-                          FROM extension_mesh_product integrated
-                         WHERE integrated.product_id = pr.product_id
-                           AND integrated.enabled = 1
-                    )
-                 )',
-            ['liveVersion' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION)]
-        );
+        $eligible = \array_flip($this->entitlements->eligibleProductIds($context));
+        $all = $this->releases->search(new Criteria(), $context);
+        $downloadIds = [];
+        foreach ($all as $release) {
+            $downloadIds[] = $release->getProductDownloadId();
+        }
+        $existingDownloads = [];
+        if ($downloadIds !== []) {
+            $criteria = (new Criteria($downloadIds))
+                ->addFilter(new EqualsFilter('versionId', Defaults::LIVE_VERSION));
+            $existingDownloads = \array_flip($this->productDownloads->searchIds($criteria, $context)->getIds());
+        }
+
+        $deletes = [];
+        foreach ($all as $release) {
+            if (!isset($eligible[$release->getProductId()]) || !isset($existingDownloads[$release->getProductDownloadId()])) {
+                $deletes[] = ['id' => $release->getId()];
+            }
+        }
+        if ($deletes !== []) {
+            $this->releases->delete($deletes, $context);
+        }
     }
 
     /**
@@ -322,75 +184,94 @@ final class PublicationRepository
      *
      * @return list<array<string, mixed>>
      */
-    public function validForProducts(array $productIds): array
+    public function validForProducts(array $productIds, Context $context): array
     {
         if ($productIds === []) {
             return [];
         }
+        $criteria = $this->validCriteria()
+            ->addFilter(new EqualsAnyFilter('productId', $productIds))
+            ->addAssociation('productDownload')
+            ->addFilter(new EqualsFilter('productDownload.versionId', Defaults::LIVE_VERSION))
+            ->addSorting(new FieldSorting('technicalName'))
+            ->addSorting(new FieldSorting('version'));
 
-        $binaryIds = \array_map(Uuid::fromHexToBytes(...), $productIds);
-        $rows = $this->connection->fetchAllAssociative(
-            'SELECT pr.*
-               FROM extension_mesh_published_release pr
-               INNER JOIN product_download pd
-                 ON pd.id = pr.product_download_id
-                AND pd.version_id = :liveVersion
-              WHERE pr.product_id IN (:productIds)
-                AND pr.validation_error IS NULL
-                AND pr.metadata IS NOT NULL
-                AND pr.sha256 IS NOT NULL
-                AND (
-                    EXISTS (
-                        SELECT 1
-                          FROM extension_mesh_repository_connection connection
-                         WHERE connection.product_id = pr.product_id
-                           AND connection.enabled = 1
-                    )
-                    OR EXISTS (
-                        SELECT 1
-                          FROM extension_mesh_product integrated
-                         WHERE integrated.product_id = pr.product_id
-                           AND integrated.enabled = 1
-                    )
-                )
-              ORDER BY pr.technical_name, pr.version',
-            [
-                'liveVersion' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
-                'productIds' => $binaryIds,
-            ],
-            ['productIds' => ArrayParameterType::BINARY]
-        );
-
-        return \array_map($this->hydrate(...), $rows);
+        return $this->hydrateMany($this->releases->search($criteria, $context)->getElements());
     }
 
     /**
-     * @param array<string, mixed> $row
+     * @param list<string> $ids
      *
-     * @return array<string, mixed>
+     * @return array<string, array<string, mixed>>
      */
-    private function hydrate(array $row): array
+    private function keyedBy(string $field, array $ids, Context $context, bool $validOnly = false): array
     {
-        $metadata = null;
-        if (\is_string($row['metadata'] ?? null)) {
-            $decoded = \json_decode($row['metadata'], true);
-            $metadata = \is_array($decoded) ? $decoded : null;
+        if ($ids === []) {
+            return [];
+        }
+        $criteria = $validOnly ? $this->validCriteria() : new Criteria();
+        $criteria->addFilter(new EqualsAnyFilter($field, $ids));
+        if ($validOnly) {
+            $eligible = $this->entitlements->eligibleProductIds($context);
+            if ($eligible === []) {
+                return [];
+            }
+            $criteria->addFilter(new EqualsAnyFilter('productId', $eligible));
         }
 
+        $rows = [];
+        $releases = $this->releases->search($criteria, $context);
+        foreach ($releases as $entity) {
+            $key = $field === 'mediaId' ? $entity->getMediaId() : $entity->getProductDownloadId();
+            $rows[$key] = $this->hydrate($entity);
+        }
+
+        return $rows;
+    }
+
+    private function validCriteria(): Criteria
+    {
+        return (new Criteria())
+            ->addFilter(new EqualsFilter('validationError', null))
+            ->addFilter(new NotFilter(NotFilter::CONNECTION_AND, [new EqualsFilter('metadata', null)]))
+            ->addFilter(new NotFilter(NotFilter::CONNECTION_AND, [new EqualsFilter('sha256', null)]));
+    }
+
+    /**
+     * @param array<string, PublishedReleaseEntity> $entities
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function hydrateMany(array $entities): array
+    {
+        return \array_values(\array_map(
+            fn (PublishedReleaseEntity $entity): array => $this->hydrate($entity),
+            $entities
+        ));
+    }
+
+    /** @return array<string, mixed> */
+    private function hydrate(PublishedReleaseEntity $entity): array
+    {
+        $createdAt = $entity->getCreatedAt();
+
         return [
-            'id' => Uuid::fromBytesToHex((string) $row['id']),
-            'downloadId' => Uuid::fromBytesToHex((string) $row['product_download_id']),
-            'productId' => Uuid::fromBytesToHex((string) $row['product_id']),
-            'mediaId' => Uuid::fromBytesToHex((string) $row['media_id']),
-            'fingerprint' => (string) $row['fingerprint'],
-            'technicalName' => \is_string($row['technical_name'] ?? null) ? $row['technical_name'] : null,
-            'version' => \is_string($row['version'] ?? null) ? $row['version'] : null,
-            'metadata' => $metadata,
-            'sha256' => \is_string($row['sha256'] ?? null) ? $row['sha256'] : null,
-            'validationError' => \is_string($row['validation_error'] ?? null) ? $row['validation_error'] : null,
-            'releasedAt' => (new \DateTimeImmutable((string) $row['created_at']))
-                ->setTimezone(new \DateTimeZone('UTC'))
-                ->format('Y-m-d\TH:i:s\Z'),
+            'id' => $entity->getId(),
+            'downloadId' => $entity->getProductDownloadId(),
+            'productId' => $entity->getProductId(),
+            'mediaId' => $entity->getMediaId(),
+            'fingerprint' => $entity->getFingerprint(),
+            'technicalName' => $entity->getTechnicalName(),
+            'version' => $entity->getVersion(),
+            'metadata' => $entity->getMetadata(),
+            'sha256' => $entity->getSha256(),
+            'validationError' => $entity->getValidationError(),
+            'releasedAt' => $createdAt instanceof \DateTimeInterface
+                ? \DateTimeImmutable::createFromInterface($createdAt)
+                    ->setTimezone(new \DateTimeZone('UTC'))
+                    ->format('Y-m-d\TH:i:s\Z')
+                : '',
         ];
     }
+
 }

@@ -2,43 +2,33 @@
 
 namespace ExtensionMesh\Shopware\Api;
 
-use ExtensionMesh\Shopware\Service\PublisherCatalogService;
+use ExtensionMesh\Shopware\Service\PublicationSynchronizer;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\Routing\ApiRouteScope;
 use Shopware\Core\PlatformRequest;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
 #[Route(defaults: [
     PlatformRequest::ATTRIBUTE_ROUTE_SCOPE => [ApiRouteScope::ID],
     PlatformRequest::ATTRIBUTE_ACL => ['system.plugin_maintain'],
 ])]
-final class PublisherController extends AbstractController
+final class PublisherController
 {
-    public function __construct(private readonly PublisherCatalogService $catalog)
+    public function __construct(private readonly PublicationSynchronizer $synchronizer)
     {
     }
 
     #[Route(
-        path: '/api/_action/extension-mesh/publication',
-        name: 'api.action.extension_mesh.publication',
-        methods: [Request::METHOD_GET]
+        path: '/api/_action/extension-mesh/publication/synchronize',
+        name: 'api.action.extension_mesh.publication.synchronize',
+        methods: [Request::METHOD_POST]
     )]
-    public function status(Request $request, Context $context): JsonResponse
+    public function synchronize(Context $context): Response
     {
-        $result = $this->catalog->publicationStatus(
-            $context,
-            \max(1, $request->query->getInt('page', 1)),
-            \max(1, \min(100, $request->query->getInt('limit', 10))),
-            $request->query->getBoolean('synchronize', true)
-        );
+        $this->synchronizer->synchronize($context);
 
-        return new JsonResponse([
-            ...$result,
-            'registryPath' => '/extension-mesh/v1/registry',
-            'accountPath' => '/account/extension-mesh',
-        ]);
+        return new Response(status: Response::HTTP_NO_CONTENT);
     }
 }

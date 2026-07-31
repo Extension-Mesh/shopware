@@ -31,35 +31,10 @@ final class RegistryController extends AbstractController
 
     #[Route(
         path: '/api/_action/extension-mesh/registries',
-        name: 'api.action.extension_mesh.registries.list',
-        methods: [Request::METHOD_GET]
-    )]
-    public function sources(): JsonResponse
-    {
-        $sources = \array_map(
-            static fn (array $source): array => [
-                'id' => $source['id'],
-                'url' => $source['url'],
-                'resolvedUrl' => $source['normalizedUrl'],
-                'label' => $source['label'],
-                'enabled' => $source['enabled'],
-                'hasCredential' => $source['credentialCiphertext'] !== null,
-                'credentialFingerprint' => $source['credentialFingerprint'],
-                'lastRefreshedAt' => $source['lastRefreshedAt'],
-                'lastError' => $source['lastError'],
-            ],
-            $this->sources->all()
-        );
-
-        return new JsonResponse(['data' => $sources]);
-    }
-
-    #[Route(
-        path: '/api/_action/extension-mesh/registries',
         name: 'api.action.extension_mesh.registries.add',
         methods: [Request::METHOD_POST]
     )]
-    public function add(Request $request): JsonResponse
+    public function add(Request $request, Context $context): JsonResponse
     {
         try {
             $data = $request->toArray();
@@ -73,7 +48,7 @@ final class RegistryController extends AbstractController
                 throw ExtensionMeshException::invalidCredential('it must be a string.');
             }
 
-            $id = $this->catalog->addSource($url, $accessToken);
+            $id = $this->catalog->addSource($url, $accessToken, $context);
 
             return new JsonResponse(['id' => $id], Response::HTTP_CREATED);
         } catch (ExtensionMeshException|\JsonException $exception) {
@@ -87,7 +62,7 @@ final class RegistryController extends AbstractController
         requirements: ['id' => '[0-9a-f]{32}'],
         methods: [Request::METHOD_PUT]
     )]
-    public function credential(string $id, Request $request): Response
+    public function credential(string $id, Request $request, Context $context): Response
     {
         try {
             $data = $request->toArray();
@@ -95,7 +70,7 @@ final class RegistryController extends AbstractController
             if ($accessToken !== null && !\is_string($accessToken)) {
                 throw ExtensionMeshException::invalidCredential('it must be a string or null.');
             }
-            $this->catalog->updateCredential($id, $accessToken);
+            $this->catalog->updateCredential($id, $accessToken, $context);
 
             return new Response('', Response::HTTP_NO_CONTENT);
         } catch (ExtensionMeshException|\JsonException $exception) {
@@ -108,10 +83,10 @@ final class RegistryController extends AbstractController
         name: 'api.action.extension_mesh.registries.delete',
         methods: [Request::METHOD_DELETE]
     )]
-    public function delete(string $id): Response
+    public function delete(string $id, Context $context): Response
     {
         try {
-            $this->sources->remove($id);
+            $this->sources->remove($id, $context);
 
             return new Response('', Response::HTTP_NO_CONTENT);
         } catch (ExtensionMeshException $exception) {
@@ -124,11 +99,11 @@ final class RegistryController extends AbstractController
         name: 'api.action.extension_mesh.refresh',
         methods: [Request::METHOD_POST]
     )]
-    public function refresh(): JsonResponse
+    public function refresh(Context $context): JsonResponse
     {
-        $this->catalog->refreshAll();
+        $this->catalog->refreshAll($context);
 
-        return new JsonResponse(['data' => $this->publicSources()]);
+        return new JsonResponse(['data' => $this->publicSources($context)]);
     }
 
     #[Route(
@@ -136,12 +111,12 @@ final class RegistryController extends AbstractController
         name: 'api.action.extension_mesh.extensions',
         methods: [Request::METHOD_GET]
     )]
-    public function extensions(Request $request): JsonResponse
+    public function extensions(Request $request, Context $context): JsonResponse
     {
         $locale = $request->query->getString('locale', 'en-GB');
 
         return new JsonResponse([
-            'data' => $this->catalog->catalog($this->shopwareVersion, \PHP_VERSION, $locale),
+            'data' => $this->catalog->catalog($this->shopwareVersion, \PHP_VERSION, $locale, $context),
         ]);
     }
 
@@ -161,7 +136,8 @@ final class RegistryController extends AbstractController
                 $registryId,
                 $technicalName,
                 $this->shopwareVersion,
-                \PHP_VERSION
+                \PHP_VERSION,
+                $context
             );
             $this->installer->prepare(
                 $download['release'],
@@ -181,7 +157,7 @@ final class RegistryController extends AbstractController
     /**
      * @return list<array<string, mixed>>
      */
-    private function publicSources(): array
+    private function publicSources(Context $context): array
     {
         return \array_map(
             static fn (array $source): array => [
@@ -191,7 +167,7 @@ final class RegistryController extends AbstractController
                 'lastRefreshedAt' => $source['lastRefreshedAt'],
                 'lastError' => $source['lastError'],
             ],
-            $this->sources->all()
+            $this->sources->all($context)
         );
     }
 

@@ -63,10 +63,12 @@ wait_for_repository() {
         docker compose exec -T seller \
             bin/console messenger:consume async \
             --time-limit=10 --no-ansi --no-interaction >/dev/null
-        curl -fsS \
-            "${seller_api}/_action/extension-mesh/repositories?page=1&limit=100" \
+        curl -fsS -X POST \
+            "${seller_api}/search/extension-mesh-repository-connection" \
             -H "${auth_header}" \
-            | jq --arg id "${wait_connection_id}" '.data[] | select(.id == $id)' >"${wait_output}"
+            -H 'Content-Type: application/json' \
+            --data '{"ids":["'"${wait_connection_id}"'"]}' \
+            | jq '.data[0] | {id} + .attributes' >"${wait_output}"
         wait_status=$(jq -r '.onboardingStatus // "missing"' "${wait_output}")
         if [ "${wait_status}" = "ready" ]; then
             return
@@ -84,32 +86,24 @@ find_publication() {
     publication_product_id="$1"
     publication_version="$2"
     publication_output="$3"
-    publication_page=1
-    while [ "${publication_page}" -le 50 ]; do
-        curl -fsS \
-            "${seller_api}/_action/extension-mesh/publication?page=${publication_page}&limit=100" \
-            -H "${auth_header}" >"${temporary_dir}/publication-page.json"
-        if jq -e \
-            --arg productId "${publication_product_id}" \
-            --arg version "${publication_version}" \
-            '[.data[] | select(
-                .productId == $productId
-                and .technicalName == "AcmeDemoPlugin"
-                and .version == $version
-                and .validationError == null
-            )]
+    publication_criteria=$(jq -nc \
+        --arg productId "${publication_product_id}" \
+        --arg version "${publication_version}" \
+        '{page:1,limit:100,filter:[
+            {type:"equals",field:"productId",value:$productId},
+            {type:"equals",field:"technicalName",value:"AcmeDemoPlugin"},
+            {type:"equals",field:"version",value:$version},
+            {type:"equals",field:"validationError",value:null}
+        ]}')
+    curl -fsS -X POST \
+        "${seller_api}/search/extension-mesh-published-release" \
+        -H "${auth_header}" \
+        -H 'Content-Type: application/json' \
+        --data "${publication_criteria}" \
+        | jq -e '[.data[] | {id} + .attributes]
             | sort_by(.metadata.releaseNotes == null)
-            | .[0]' "${temporary_dir}/publication-page.json" >"${publication_output}"; then
-            return
-        fi
-        publication_total=$(jq -r '.total' "${temporary_dir}/publication-page.json")
-        if [ $((publication_page * 100)) -ge "${publication_total}" ]; then
-            break
-        fi
-        publication_page=$((publication_page + 1))
-    done
-
-    fail "published release ${publication_version} was not found"
+            | .[0]' >"${publication_output}" \
+        || fail "published release ${publication_version} was not found"
 }
 
 switch_release_fixture github-releases-v1.json
@@ -117,8 +111,8 @@ switch_release_fixture github-releases-v1.json
 seller_token=$(token_for "${seller_api}")
 auth_header="Authorization: Bearer ${seller_token}"
 
-curl -fsS "${seller_api}/_action/extension-mesh/repositories" -H "${auth_header}" \
-    | jq -e '.providers[] | select(
+curl -fsS "${seller_api}/_action/extension-mesh/repositories/providers" -H "${auth_header}" \
+    | jq -e '.data[] | select(
         .key == "github"
         and .label == "GitHub"
         and .defaultApiBaseUrl == "https://api.github.com"
@@ -126,13 +120,16 @@ curl -fsS "${seller_api}/_action/extension-mesh/repositories" -H "${auth_header}
     || fail 'registered repository providers are not exposed to Administration'
 # Keep the fixture repeatable after an interrupted previous run. Unlinking is
 # intentionally non-destructive, so any previously created products remain.
-curl -fsS "${seller_api}/_action/extension-mesh/repositories" -H "${auth_header}" \
+curl -fsS -X POST "${seller_api}/search/extension-mesh-repository-connection" \
+    -H "${auth_header}" \
+    -H 'Content-Type: application/json' \
+    --data '{"page":1,"limit":500}' \
     | jq -r '.data[]
         | select(
-            .provider == "github"
+            .attributes.provider == "github"
             and (
-                .repository == "acme/private-plugin"
-                or .repository == "acme/public-plugin"
+                .attributes.repository == "acme/private-plugin"
+                or .attributes.repository == "acme/public-plugin"
             )
         )
         | .id' \
@@ -168,17 +165,19 @@ jq -e '
 ' "${temporary_dir}/import.json" >/dev/null \
     || fail 'the imported connection response is incomplete or leaks its token'
 
-curl -fsS \
-    "${seller_api}/_action/extension-mesh/repositories?page=1&limit=1" \
+curl -fsS -X POST \
+    "${seller_api}/search/extension-mesh-repository-connection" \
     -H "${auth_header}" \
-    | jq -e '.page == 1 and .limit == 1 and .total >= 1 and (.data | length) == 1' \
+    -H 'Content-Type: application/json' \
+    --data '{"page":1,"limit":1}' \
+    | jq -e '.meta.total >= 1 and (.data | length) == 1' \
     >/dev/null \
     || fail 'repository pagination metadata or page size is invalid'
 
 connection_id=$(jq -er '.data.id' "${temporary_dir}/import.json")
 wait_for_repository "${connection_id}" "${temporary_dir}/import-ready.json"
 jq -e '
-    .private == true
+    .repositoryPrivate == true
     and .technicalName == "AcmeDemoPlugin"
     and .configPath == ".shopware-extension.yml"
     and .onboardingStatus == "ready"
@@ -210,7 +209,7 @@ jq -e '
 public_connection_id=$(jq -er '.data.id' "${temporary_dir}/public-link.json")
 wait_for_repository "${public_connection_id}" "${temporary_dir}/public-link-ready.json"
 jq -e '
-    .private == false
+    .repositoryPrivate == false
     and .configPath == null
     and .onboardingStatus == "ready"
 ' "${temporary_dir}/public-link-ready.json" >/dev/null \
@@ -257,10 +256,12 @@ jq -e '.metadata.releaseNotes
     == "Initial stable release.\n\n- Adds paid installation support."' \
     "${temporary_dir}/publication-v1.json" >/dev/null \
     || fail 'the initial GitHub release notes were not published'
-curl -fsS \
-    "${seller_api}/_action/extension-mesh/publication?page=1&limit=1&synchronize=0" \
+curl -fsS -X POST \
+    "${seller_api}/search/extension-mesh-published-release" \
     -H "${auth_header}" \
-    | jq -e '.page == 1 and .limit == 1 and .total >= 1 and (.data | length) == 1' \
+    -H 'Content-Type: application/json' \
+    --data '{"page":1,"limit":1}' \
+    | jq -e '.meta.total >= 1 and (.data | length) == 1' \
     >/dev/null \
     || fail 'publication pagination metadata or page size is invalid'
 

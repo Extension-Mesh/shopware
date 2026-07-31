@@ -2,8 +2,12 @@
 
 namespace ExtensionMesh\Shopware\Service;
 
-use ExtensionMesh\Shopware\Infrastructure\Persistence\PublicationRepository;
+use ExtensionMesh\Shopware\Infrastructure\Persistence\PublicationReader;
 use Shopware\Core\Checkout\Order\Aggregate\OrderLineItemDownload\OrderLineItemDownloadEntity;
+use Shopware\Core\PlatformRequest;
+use Shopware\Core\Framework\Context;
+use Shopware\Core\System\SalesChannel\SalesChannelContext;
+use Symfony\Component\HttpFoundation\RequestStack;
 
 final class StorefrontDownloadCatalog
 {
@@ -13,8 +17,10 @@ final class StorefrontDownloadCatalog
     /** @var array<string, true> */
     private array $resolvedMediaIds = [];
 
-    public function __construct(private readonly PublicationRepository $releases)
-    {
+    public function __construct(
+        private readonly PublicationReader $releases,
+        private readonly RequestStack $requestStack
+    ) {
     }
 
     /**
@@ -28,7 +34,7 @@ final class StorefrontDownloadCatalog
      *     normal: list<OrderLineItemDownloadEntity>
      * }
      */
-    public function group(iterable $downloads): array
+    public function group(iterable $downloads, ?Context $context = null): array
     {
         $items = \is_array($downloads) ? $downloads : \iterator_to_array($downloads, false);
         $unresolved = [];
@@ -40,7 +46,13 @@ final class StorefrontDownloadCatalog
             }
         }
         if ($unresolved !== []) {
-            $this->releasesByMediaId += $this->releases->byMediaIds(\array_values(\array_unique($unresolved)));
+            $context ??= $this->salesChannelContext()?->getContext();
+            if ($context !== null) {
+                $this->releasesByMediaId += $this->releases->byMediaIds(
+                    \array_values(\array_unique($unresolved)),
+                    $context
+                );
+            }
         }
 
         $normal = [];
@@ -85,6 +97,15 @@ final class StorefrontDownloadCatalog
         }
 
         return ['groups' => $result, 'normal' => $normal];
+    }
+
+    private function salesChannelContext(): ?SalesChannelContext
+    {
+        $context = $this->requestStack->getCurrentRequest()?->attributes->get(
+            PlatformRequest::ATTRIBUTE_SALES_CHANNEL_CONTEXT_OBJECT
+        );
+
+        return $context instanceof SalesChannelContext ? $context : null;
     }
 
     private function compareShopwareConstraints(string $left, string $right): int

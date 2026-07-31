@@ -2,70 +2,63 @@
 
 namespace ExtensionMesh\Shopware\Infrastructure\Persistence;
 
-use Doctrine\DBAL\Connection;
+use ExtensionMesh\Shopware\Core\Content\ExtensionMeshProduct\ExtensionMeshProductCollection;
+use ExtensionMesh\Shopware\Core\Content\RepositoryConnection\RepositoryConnectionCollection;
+use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\Framework\Uuid\Uuid;
 
 final class ExtensionMeshProductRepository
 {
-    public function __construct(private readonly Connection $connection)
-    {
+    public function __construct(
+        /** @var EntityRepository<ExtensionMeshProductCollection> */
+        private readonly EntityRepository $products,
+        /** @var EntityRepository<RepositoryConnectionCollection> */
+        private readonly EntityRepository $connections
+    ) {
     }
 
-    /**
-     * @return array{enabled: bool, source: ?string}
-     */
-    public function status(string $productId): array
+    /** @return array{enabled: bool, source: ?string} */
+    public function status(string $productId, Context $context): array
     {
         if (!Uuid::isValid($productId)) {
             return ['enabled' => false, 'source' => null];
         }
-        $binaryId = Uuid::fromHexToBytes($productId);
-        if ((bool) $this->connection->fetchOne(
-            'SELECT 1
-               FROM extension_mesh_repository_connection
-              WHERE product_id = :productId
-                AND enabled = 1
-              LIMIT 1',
-            ['productId' => $binaryId]
-        )) {
+        $connectionCriteria = (new Criteria())
+            ->addFilter(new EqualsFilter('productId', $productId))
+            ->addFilter(new EqualsFilter('enabled', true))
+            ->setLimit(1);
+        if ($this->connections->searchIds($connectionCriteria, $context)->getTotal() > 0) {
             return ['enabled' => true, 'source' => 'repository'];
         }
-        if ((bool) $this->connection->fetchOne(
-            'SELECT 1
-               FROM extension_mesh_product
-              WHERE product_id = :productId
-                AND enabled = 1',
-            ['productId' => $binaryId]
-        )) {
+
+        $manualCriteria = (new Criteria())
+            ->addFilter(new EqualsFilter('productId', $productId))
+            ->addFilter(new EqualsFilter('productVersionId', Defaults::LIVE_VERSION))
+            ->addFilter(new EqualsFilter('enabled', true))
+            ->setLimit(1);
+        if ($this->products->searchIds($manualCriteria, $context)->getTotal() > 0) {
             return ['enabled' => true, 'source' => 'manual'];
         }
 
         return ['enabled' => false, 'source' => null];
     }
 
-    public function setManual(string $productId, bool $enabled): void
+    public function setManual(string $productId, bool $enabled, Context $context): void
     {
         if (!Uuid::isValid($productId)) {
             return;
         }
-        $binaryId = Uuid::fromHexToBytes($productId);
+        $key = ['productId' => $productId, 'productVersionId' => Defaults::LIVE_VERSION];
         if (!$enabled) {
-            $this->connection->delete('extension_mesh_product', ['product_id' => $binaryId]);
+            $this->products->delete([$key], $context);
 
             return;
         }
-        $now = (new \DateTimeImmutable())->format('Y-m-d H:i:s.v');
-        $this->connection->executeStatement(
-            <<<'SQL'
-                INSERT INTO extension_mesh_product (product_id, enabled, created_at)
-                VALUES (:productId, 1, :createdAt)
-                ON DUPLICATE KEY UPDATE enabled = 1, updated_at = :updatedAt
-                SQL,
-            [
-                'productId' => $binaryId,
-                'createdAt' => $now,
-                'updatedAt' => $now,
-            ]
-        );
+
+        $this->products->upsert([[...$key, 'enabled' => true]], $context);
     }
 }

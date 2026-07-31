@@ -7,6 +7,7 @@ use ExtensionMesh\Shopware\Infrastructure\Persistence\ProductDownloadCatalogRepo
 use ExtensionMesh\Shopware\Message\PublicationSyncMessage;
 use ExtensionMesh\Shopware\Service\RepositoryProductWriter;
 use Shopware\Core\Framework\Routing\ApiRouteScope;
+use Shopware\Core\Framework\Context;
 use Shopware\Core\PlatformRequest;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -34,13 +35,13 @@ final class ProductDownloadController
         requirements: ['productId' => '[0-9a-f]{32}'],
         methods: [Request::METHOD_GET]
     )]
-    public function integration(string $productId): JsonResponse
+    public function integration(string $productId, Context $context): JsonResponse
     {
-        if (!$this->productWriter->productExists($productId)) {
+        if (!$this->productWriter->productExists($productId, $context)) {
             return $this->notFound();
         }
 
-        return new JsonResponse(['data' => $this->products->status($productId)]);
+        return new JsonResponse(['data' => $this->products->status($productId, $context)]);
     }
 
     #[Route(
@@ -49,9 +50,9 @@ final class ProductDownloadController
         requirements: ['productId' => '[0-9a-f]{32}'],
         methods: [Request::METHOD_PUT]
     )]
-    public function updateIntegration(string $productId, Request $request): JsonResponse
+    public function updateIntegration(string $productId, Request $request, Context $context): JsonResponse
     {
-        if (!$this->productWriter->productExists($productId)) {
+        if (!$this->productWriter->productExists($productId, $context)) {
             return $this->notFound();
         }
 
@@ -64,15 +65,15 @@ final class ProductDownloadController
             return $this->invalid('"enabled" must be a boolean.');
         }
 
-        $status = $this->products->status($productId);
+        $status = $this->products->status($productId, $context);
         if ($status['source'] === 'repository' && $data['enabled'] === false) {
             return $this->invalid('Repository-managed products cannot be disconnected here.');
         }
 
-        $this->products->setManual($productId, $data['enabled']);
+        $this->products->setManual($productId, $data['enabled'], $context);
         $this->messageBus->dispatch(new PublicationSyncMessage());
 
-        return new JsonResponse(['data' => $this->products->status($productId)]);
+        return new JsonResponse(['data' => $this->products->status($productId, $context)]);
     }
 
     #[Route(
@@ -81,16 +82,17 @@ final class ProductDownloadController
         requirements: ['productId' => '[0-9a-f]{32}'],
         methods: [Request::METHOD_GET]
     )]
-    public function downloads(string $productId, Request $request): JsonResponse
+    public function downloads(string $productId, Request $request, Context $context): JsonResponse
     {
-        if (!$this->productWriter->productExists($productId)) {
+        if (!$this->productWriter->productExists($productId, $context)) {
             return $this->notFound();
         }
 
         return new JsonResponse($this->downloads->paginate(
             $productId,
             \max(1, $request->query->getInt('page', 1)),
-            \max(1, \min(100, $request->query->getInt('limit', 10)))
+            \max(1, \min(100, $request->query->getInt('limit', 10))),
+            $context
         ));
     }
 
@@ -100,12 +102,12 @@ final class ProductDownloadController
         requirements: ['productId' => '[0-9a-f]{32}'],
         methods: [Request::METHOD_POST]
     )]
-    public function refreshPublication(string $productId): JsonResponse
+    public function refreshPublication(string $productId, Context $context): JsonResponse
     {
-        if (!$this->productWriter->productExists($productId)) {
+        if (!$this->productWriter->productExists($productId, $context)) {
             return $this->notFound();
         }
-        if (!$this->products->status($productId)['enabled']) {
+        if (!$this->products->status($productId, $context)['enabled']) {
             return $this->invalid('The product is not connected to Extension Mesh.');
         }
 

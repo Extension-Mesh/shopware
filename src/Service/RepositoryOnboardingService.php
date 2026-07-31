@@ -9,7 +9,6 @@ use ExtensionMesh\Shopware\Message\RepositoryProcessMessage;
 use ExtensionMesh\Shopware\Repository\RepositoryProductMetadataLoader;
 use ExtensionMesh\Shopware\Repository\RepositoryProviderRegistry;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Symfony\Component\Messenger\MessageBusInterface;
 
 final class RepositoryOnboardingService
@@ -24,26 +23,6 @@ final class RepositoryOnboardingService
         private readonly CredentialCipher $cipher,
         private readonly MessageBusInterface $messageBus
     ) {
-    }
-
-    /**
-     * @return array{
-     *     data: list<array<string, mixed>>,
-     *     total: int,
-     *     page: int,
-     *     limit: int
-     * }
-     */
-    public function paginate(int $page, int $limit): array
-    {
-        $result = $this->connections->paginate($page, $limit);
-
-        return [
-            'data' => \array_map($this->publicConnection(...), $result['items']),
-            'total' => $result['total'],
-            'page' => $result['page'],
-            'limit' => $result['limit'],
-        ];
     }
 
     /**
@@ -63,7 +42,8 @@ final class RepositoryOnboardingService
         string $apiBaseUrl,
         string $credential,
         string $mode,
-        ?string $productId
+        ?string $productId,
+        Context $context
     ): array {
         $credential = $this->credential($credential);
         $provider = $this->providers->get($providerKey);
@@ -86,11 +66,11 @@ final class RepositoryOnboardingService
             if (!\is_string($productId)) {
                 throw ExtensionMeshException::invalidRepository('link mode requires a Shopware product.');
             }
-            $this->products->assertProductExists($productId);
+            $this->products->assertProductExists($productId, $context);
         } else {
             $productId = null;
         }
-        if ($this->connections->exists($provider->key(), $repository, $apiBaseUrl)) {
+        if ($this->connections->exists($provider->key(), $repository, $apiBaseUrl, null, $context)) {
             throw ExtensionMeshException::invalidRepository('this repository is already connected.');
         }
 
@@ -101,17 +81,18 @@ final class RepositoryOnboardingService
             $credential === '' ? null : $this->cipher->encrypt($credential),
             $credential === '' ? null : $this->cipher->fingerprint($credential),
             $productId,
-            $mode
+            $mode,
+            $context
         );
         try {
             $this->messageBus->dispatch(new RepositoryProcessMessage($id));
         } catch (\Throwable $exception) {
-            $this->connections->markFailed($id, $exception->getMessage());
+            $this->connections->markFailed($id, $exception->getMessage(), $context);
             throw $exception;
         }
 
         return $this->publicConnection(
-            $this->connections->get($id)
+            $this->connections->get($id, $context)
                 ?? throw ExtensionMeshException::repositoryNotFound($id)
         );
     }
@@ -119,9 +100,9 @@ final class RepositoryOnboardingService
     /**
      * @return array<string, mixed>
      */
-    public function queueSynchronization(string $id): array
+    public function queueSynchronization(string $id, Context $context): array
     {
-        $connection = $this->connections->get($id);
+        $connection = $this->connections->get($id, $context);
         if ($connection === null) {
             throw ExtensionMeshException::repositoryNotFound($id);
         }
@@ -138,21 +119,21 @@ final class RepositoryOnboardingService
             }
             $stage = $failedStage;
         }
-        $this->connections->markProcessing($id, 'queued', $stage);
+        $this->connections->markProcessing($id, 'queued', $stage, $context);
         $this->messageBus->dispatch(new RepositoryProcessMessage(
             $id,
             $stage
         ));
 
         return $this->publicConnection(
-            $this->connections->get($id)
+            $this->connections->get($id, $context)
                 ?? throw ExtensionMeshException::repositoryNotFound($id)
         );
     }
 
-    public function inspectQueued(string $id): bool
+    public function inspectQueued(string $id, Context $context): bool
     {
-        $connection = $this->connections->get($id);
+        $connection = $this->connections->get($id, $context);
         if ($connection === null) {
             return false;
         }
@@ -163,7 +144,7 @@ final class RepositoryOnboardingService
             return false;
         }
 
-        $this->connections->markProcessing($id, 'inspecting', RepositoryProcessMessage::STAGE_INSPECT);
+        $this->connections->markProcessing($id, 'inspecting', RepositoryProcessMessage::STAGE_INSPECT, $context);
         $credential = $this->credentials->resolveForInspection($connection);
         $provider = $this->providers->get((string) $connection['provider']);
         $inspection = $provider->inspect(
@@ -175,11 +156,12 @@ final class RepositoryOnboardingService
             $provider->key(),
             $inspection['repository'],
             $inspection['apiBaseUrl'],
-            $id
+            $id,
+            $context
         )) {
             throw ExtensionMeshException::invalidRepository('this repository is already connected.');
         }
-        $this->connections->storeInspection($id, $inspection);
+        $this->connections->storeInspection($id, $inspection, $context);
 
         return true;
     }
@@ -189,7 +171,7 @@ final class RepositoryOnboardingService
      */
     public function prepareQueued(string $id, Context $context, int $offset = 0): array
     {
-        $connection = $this->connections->get($id);
+        $connection = $this->connections->get($id, $context);
         if ($connection === null) {
             return ['prepared' => false, 'nextOffset' => null];
         }
@@ -205,7 +187,7 @@ final class RepositoryOnboardingService
             );
         }
 
-        $this->connections->markProcessing($id, 'preparing', RepositoryProcessMessage::STAGE_PREPARE);
+        $this->connections->markProcessing($id, 'preparing', RepositoryProcessMessage::STAGE_PREPARE, $context);
         $credential = $this->credentials->resolveForInspection($connection);
         $provider = $this->providers->get((string) $connection['provider']);
         $discovery = $this->synchronizer->discoverLatestBatch(
@@ -233,13 +215,12 @@ final class RepositoryOnboardingService
             if (!\is_string($productId)) {
                 throw ExtensionMeshException::invalidRepository('link mode requires a Shopware product.');
             }
-            $this->products->assertProductExists($productId);
+            $this->products->assertProductExists($productId, $context);
         } elseif ($mode === 'import') {
             if (!\is_string($productId)) {
-                $productId = Uuid::randomHex();
-                $this->connections->reserveProduct($id, $productId);
+                $productId = $id;
             }
-            if (!$this->products->productExists($productId)) {
+            if (!$this->products->productExists($productId, $context)) {
                 $icon = null;
                 if (\is_string($metadata['iconPath'])) {
                     $icon = $provider->readFile(
@@ -281,42 +262,44 @@ final class RepositoryOnboardingService
             $id,
             $productId,
             (string) $latest['archive']['name'],
-            $metadata['configPath']
+            $metadata['configPath'],
+            $context
         );
 
         return ['prepared' => true, 'nextOffset' => null];
     }
 
-    public function hasConnection(string $id): bool
+    public function hasConnection(string $id, Context $context): bool
     {
-        return $this->connections->get($id) !== null;
+        return $this->connections->get($id, $context) !== null;
     }
 
-    public function markSynchronizing(string $id): void
+    public function markSynchronizing(string $id, Context $context): void
     {
-        if ($this->connections->get($id) !== null) {
+        if ($this->connections->get($id, $context) !== null) {
             $this->connections->markProcessing(
                 $id,
                 'synchronizing',
-                RepositoryProcessMessage::STAGE_SYNCHRONIZE
+                RepositoryProcessMessage::STAGE_SYNCHRONIZE,
+                $context
             );
         }
     }
 
-    public function markFailed(string $id, string $message): void
+    public function markFailed(string $id, string $message, Context $context): void
     {
-        if ($this->connections->get($id) !== null) {
-            $this->connections->markFailed($id, $message);
+        if ($this->connections->get($id, $context) !== null) {
+            $this->connections->markFailed($id, $message, $context);
         }
     }
 
     /**
      * @return list<string>
      */
-    public function readyConnectionIds(): array
+    public function readyConnectionIds(Context $context): array
     {
         $ids = [];
-        foreach ($this->connections->all(true) as $connection) {
+        foreach ($this->connections->all(true, $context) as $connection) {
             if (
                 \is_string($connection['productId'] ?? null)
                 && \in_array($connection['onboardingStatus'], ['ready', 'failed'], true)
@@ -331,9 +314,9 @@ final class RepositoryOnboardingService
     /**
      * @return array<string, mixed>
      */
-    public function updateCredential(string $id, string $credential): array
+    public function updateCredential(string $id, string $credential, Context $context): array
     {
-        $connection = $this->connections->get($id);
+        $connection = $this->connections->get($id, $context);
         if ($connection === null) {
             throw ExtensionMeshException::repositoryNotFound($id);
         }
@@ -346,21 +329,22 @@ final class RepositoryOnboardingService
         $this->connections->updateCredential(
             $id,
             $credential === '' ? null : $this->cipher->encrypt($credential),
-            $credential === '' ? null : $this->cipher->fingerprint($credential)
+            $credential === '' ? null : $this->cipher->fingerprint($credential),
+            $context
         );
 
         return $this->publicConnection(
-            $this->connections->get($id)
+            $this->connections->get($id, $context)
                 ?? throw ExtensionMeshException::repositoryNotFound($id)
         );
     }
 
-    public function unlink(string $id): void
+    public function unlink(string $id, Context $context): void
     {
-        if ($this->connections->get($id) === null) {
+        if ($this->connections->get($id, $context) === null) {
             throw ExtensionMeshException::repositoryNotFound($id);
         }
-        $this->connections->delete($id);
+        $this->connections->delete($id, $context);
     }
 
     /**

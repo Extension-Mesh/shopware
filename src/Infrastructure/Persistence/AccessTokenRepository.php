@@ -2,123 +2,115 @@
 
 namespace ExtensionMesh\Shopware\Infrastructure\Persistence;
 
-use Doctrine\DBAL\Connection;
+use ExtensionMesh\Shopware\Core\Content\AccessToken\AccessTokenEntity;
+use ExtensionMesh\Shopware\Core\Content\AccessToken\AccessTokenCollection;
+use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Sorting\FieldSorting;
 use Shopware\Core\Framework\Uuid\Uuid;
 
 final class AccessTokenRepository
 {
-    public function __construct(private readonly Connection $connection)
+    public function __construct(
+        /** @var EntityRepository<AccessTokenCollection> */
+        private readonly EntityRepository $repository
+    )
     {
     }
 
-    /**
-     * @return array{id: string, customerId: string, salesChannelId: string}|null
-     */
-    public function activeForCustomer(string $customerId, string $salesChannelId): ?array
+    /** @return array{id: string, customerId: string, salesChannelId: string}|null */
+    public function activeForCustomer(string $customerId, string $salesChannelId, Context $context): ?array
     {
         if (!Uuid::isValid($customerId) || !Uuid::isValid($salesChannelId)) {
             return null;
         }
 
-        $row = $this->connection->fetchAssociative(
-            'SELECT id, customer_id, sales_channel_id
-               FROM extension_mesh_access_token
-              WHERE customer_id = :customerId
-                AND sales_channel_id = :salesChannelId
-                AND revoked_at IS NULL
-              ORDER BY created_at DESC
-              LIMIT 1',
-            [
-                'customerId' => Uuid::fromHexToBytes($customerId),
-                'salesChannelId' => Uuid::fromHexToBytes($salesChannelId),
-            ]
-        );
+        $criteria = (new Criteria())
+            ->addFilter(new EqualsFilter('customerId', $customerId))
+            ->addFilter(new EqualsFilter('salesChannelId', $salesChannelId))
+            ->addFilter(new EqualsFilter('revokedAt', null))
+            ->addSorting(new FieldSorting('createdAt', FieldSorting::DESCENDING))
+            ->setLimit(1);
 
-        return $row === false ? null : $this->hydrate($row);
+        return $this->hydrate($this->repository->search($criteria, $context)->first());
     }
 
-    /**
-     * @return array{id: string, customerId: string, salesChannelId: string}|null
-     */
-    public function activeById(string $id): ?array
+    /** @return array{id: string, customerId: string, salesChannelId: string}|null */
+    public function activeById(string $id, Context $context): ?array
     {
         if (!Uuid::isValid($id)) {
             return null;
         }
 
-        $row = $this->connection->fetchAssociative(
-            'SELECT id, customer_id, sales_channel_id
-               FROM extension_mesh_access_token
-              WHERE id = :id AND revoked_at IS NULL',
-            ['id' => Uuid::fromHexToBytes($id)]
-        );
+        $criteria = (new Criteria([$id]))
+            ->addFilter(new EqualsFilter('revokedAt', null));
 
-        return $row === false ? null : $this->hydrate($row);
+        return $this->hydrate($this->repository->search($criteria, $context)->first());
     }
 
-    /**
-     * @return array{id: string, customerId: string, salesChannelId: string}
-     */
-    public function create(string $customerId, string $salesChannelId): array
+    /** @return array{id: string, customerId: string, salesChannelId: string} */
+    public function create(string $customerId, string $salesChannelId, Context $context): array
     {
         $id = Uuid::randomHex();
-        $now = (new \DateTimeImmutable())->format('Y-m-d H:i:s.v');
-        $this->connection->insert('extension_mesh_access_token', [
-            'id' => Uuid::fromHexToBytes($id),
-            'customer_id' => Uuid::fromHexToBytes($customerId),
-            'sales_channel_id' => Uuid::fromHexToBytes($salesChannelId),
-            'created_at' => $now,
-        ]);
+        $this->repository->create([[
+            'id' => $id,
+            'customerId' => $customerId,
+            'salesChannelId' => $salesChannelId,
+        ]], $context);
 
         return ['id' => $id, 'customerId' => $customerId, 'salesChannelId' => $salesChannelId];
     }
 
-    public function revokeForCustomer(string $customerId, string $salesChannelId): void
+    public function revokeForCustomer(string $customerId, string $salesChannelId, Context $context): void
     {
-        $this->connection->executeStatement(
-            'UPDATE extension_mesh_access_token
-                SET revoked_at = :now, updated_at = :now
-              WHERE customer_id = :customerId
-                AND sales_channel_id = :salesChannelId
-                AND revoked_at IS NULL',
-            [
-                'now' => (new \DateTimeImmutable())->format('Y-m-d H:i:s.v'),
-                'customerId' => Uuid::fromHexToBytes($customerId),
-                'salesChannelId' => Uuid::fromHexToBytes($salesChannelId),
-            ]
-        );
+        $criteria = (new Criteria())
+            ->addFilter(new EqualsFilter('customerId', $customerId))
+            ->addFilter(new EqualsFilter('salesChannelId', $salesChannelId))
+            ->addFilter(new EqualsFilter('revokedAt', null));
+        $ids = $this->repository->searchIds($criteria, $context)->getIds();
+        if ($ids === []) {
+            return;
+        }
+
+        $now = new \DateTimeImmutable();
+        $this->repository->update(\array_map(
+            static fn (string $id): array => ['id' => $id, 'revokedAt' => $now],
+            $ids
+        ), $context);
     }
 
-    public function touch(string $id): void
+    public function touch(string $id, Context $context): void
     {
         if (!Uuid::isValid($id)) {
             return;
         }
 
-        $this->connection->executeStatement(
-            'UPDATE extension_mesh_access_token
-                SET last_used_at = :now
-              WHERE id = :id
-                AND (last_used_at IS NULL OR last_used_at < :threshold)',
-            [
-                'now' => (new \DateTimeImmutable())->format('Y-m-d H:i:s.v'),
-                'threshold' => (new \DateTimeImmutable('-1 hour'))->format('Y-m-d H:i:s.v'),
-                'id' => Uuid::fromHexToBytes($id),
-            ]
-        );
+        $entity = $this->repository->search(new Criteria([$id]), $context)->first();
+        if (!$entity instanceof AccessTokenEntity) {
+            return;
+        }
+        $lastUsedAt = $entity->getLastUsedAt();
+        if ($lastUsedAt instanceof \DateTimeInterface && $lastUsedAt > new \DateTimeImmutable('-1 hour')) {
+            return;
+        }
+
+        $this->repository->update([['id' => $id, 'lastUsedAt' => new \DateTimeImmutable()]], $context);
     }
 
-    /**
-     * @param array<string, mixed> $row
-     *
-     * @return array{id: string, customerId: string, salesChannelId: string}
-     */
-    private function hydrate(array $row): array
+    /** @return array{id: string, customerId: string, salesChannelId: string}|null */
+    private function hydrate(mixed $entity): ?array
     {
+        if (!$entity instanceof AccessTokenEntity) {
+            return null;
+        }
+
         return [
-            'id' => Uuid::fromBytesToHex((string) $row['id']),
-            'customerId' => Uuid::fromBytesToHex((string) $row['customer_id']),
-            'salesChannelId' => Uuid::fromBytesToHex((string) $row['sales_channel_id']),
+            'id' => $entity->getId(),
+            'customerId' => $entity->getCustomerId(),
+            'salesChannelId' => $entity->getSalesChannelId(),
         ];
     }
+
 }

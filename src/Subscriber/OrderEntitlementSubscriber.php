@@ -39,11 +39,11 @@ final class OrderEntitlementSubscriber implements EventSubscriberInterface
 
     public function issueEntitlements(OrderStateMachineStateChangeEvent $event): void
     {
-        $this->entitlements->issueForOrder($event->getOrderId());
+        $this->entitlements->issueForOrder($event->getOrderId(), $event->getContext());
     }
 
     public function disableEntitlements(OrderStateMachineStateChangeEvent $event): void
     {
-        $this->entitlements->disableForOrder($event->getOrderId());
+        $this->entitlements->disableForOrder($event->getOrderId(), $event->getContext());
     }
 }

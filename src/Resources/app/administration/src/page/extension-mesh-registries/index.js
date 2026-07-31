@@ -2,11 +2,12 @@ import template from './extension-mesh-registries.html.twig';
 import './extension-mesh-registries.scss';
 
 const { Component } = Shopware;
+const { Criteria } = Shopware.Data;
 
 Component.register('extension-mesh-registries', {
     template,
 
-    inject: ['extensionMeshApiService'],
+    inject: ['extensionMeshApiService', 'repositoryFactory'],
 
     data() {
         return {
@@ -24,13 +25,25 @@ Component.register('extension-mesh-registries', {
         this.loadRegistries();
     },
 
+    computed: {
+        registryRepository() {
+            return this.repositoryFactory.create('extension_mesh_registry_source');
+        },
+    },
+
     methods: {
         async loadRegistries() {
             this.isLoading = true;
             this.error = null;
 
             try {
-                this.registries = await this.extensionMeshApiService.getRegistries();
+                const criteria = new Criteria(1, 500);
+                criteria.addSorting(Criteria.sort('createdAt', 'ASC'));
+                const result = await this.registryRepository.search(criteria, Shopware.Context.api);
+                this.registries = result.map((registry) => ({
+                    ...registry,
+                    hasCredential: Boolean(registry.credentialFingerprint),
+                }));
             } catch (error) {
                 this.error = this.errorMessage(error);
             } finally {

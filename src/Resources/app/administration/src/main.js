@@ -1,4 +1,5 @@
 import './service/extension-mesh-api.service';
+import './acl';
 import './module/extension-mesh';
 import './module/extension-mesh-entitlement';
 import './extension/sw-extension-my-extensions-listing';

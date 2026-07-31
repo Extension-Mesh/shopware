@@ -16,14 +16,6 @@ class ExtensionMeshApiService extends ApiService {
             .then((response) => response.data.data);
     }
 
-    getRegistries() {
-        return this.httpClient
-            .get('_action/extension-mesh/registries', {
-                headers: this.getBasicHeaders(),
-            })
-            .then((response) => response.data.data);
-    }
-
     addRegistry(url, accessToken = null) {
         return this.httpClient
             .post(
@@ -56,23 +48,6 @@ class ExtensionMeshApiService extends ApiService {
         );
     }
 
-    getEntitlements(page = 1, limit = 25, filters = {}) {
-        return this.httpClient
-            .get('_action/extension-mesh/entitlements', {
-                params: { page, limit, ...filters },
-                headers: this.getBasicHeaders(),
-            })
-            .then((response) => response.data);
-    }
-
-    getEntitlement(id) {
-        return this.httpClient
-            .get(`_action/extension-mesh/entitlements/${id}`, {
-                headers: this.getBasicHeaders(),
-            })
-            .then((response) => response.data.data);
-    }
-
     getEntitlementOptions() {
         return this.httpClient
             .get('_action/extension-mesh/entitlements/options', {
@@ -81,48 +56,20 @@ class ExtensionMeshApiService extends ApiService {
             .then((response) => response.data.data);
     }
 
-    createEntitlement(payload) {
-        return this.httpClient
-            .post(
-                '_action/extension-mesh/entitlements',
-                payload,
-                { headers: this.getBasicHeaders() },
-            )
-            .then((response) => response.data.data);
+    synchronizePublications() {
+        return this.httpClient.post(
+            '_action/extension-mesh/publication/synchronize',
+            {},
+            { headers: this.getBasicHeaders() },
+        );
     }
 
-    updateEntitlement(id, payload) {
+    getRepositoryProviders() {
         return this.httpClient
-            .put(
-                `_action/extension-mesh/entitlements/${id}`,
-                payload,
-                { headers: this.getBasicHeaders() },
-            )
-            .then((response) => response.data.data);
-    }
-
-    deleteEntitlement(id) {
-        return this.httpClient.delete(`_action/extension-mesh/entitlements/${id}`, {
-            headers: this.getBasicHeaders(),
-        });
-    }
-
-    getPublicationStatus(page = 1, limit = 10, synchronize = true) {
-        return this.httpClient
-            .get('_action/extension-mesh/publication', {
-                params: { page, limit, synchronize: synchronize ? 1 : 0 },
+            .get('_action/extension-mesh/repositories/providers', {
                 headers: this.getBasicHeaders(),
             })
-            .then((response) => response.data);
-    }
-
-    getSellerRepositories(page = 1, limit = 10) {
-        return this.httpClient
-            .get('_action/extension-mesh/repositories', {
-                params: { page, limit },
-                headers: this.getBasicHeaders(),
-            })
-            .then((response) => response.data);
+            .then((response) => response.data.data);
     }
 
     connectSellerRepository(payload) {

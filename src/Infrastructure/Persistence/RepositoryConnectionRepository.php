@@ -3,80 +3,48 @@
 namespace ExtensionMesh\Shopware\Infrastructure\Persistence;
 
 use Doctrine\DBAL\Connection;
-use Doctrine\DBAL\ParameterType;
+use ExtensionMesh\Shopware\Core\Content\RepositoryConnection\RepositoryConnectionEntity;
+use ExtensionMesh\Shopware\Core\Content\RepositoryConnection\RepositoryConnectionCollection;
+use ExtensionMesh\Shopware\Core\Content\RepositoryRelease\RepositoryReleaseCollection;
+use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Sorting\FieldSorting;
 use Shopware\Core\Framework\Uuid\Uuid;
 
 final class RepositoryConnectionRepository
 {
-    public function __construct(private readonly Connection $connection)
-    {
+    public function __construct(
+        /** @var EntityRepository<RepositoryConnectionCollection> */
+        private readonly EntityRepository $connections,
+        /** @var EntityRepository<RepositoryReleaseCollection> */
+        private readonly EntityRepository $releases,
+        private readonly Connection $connection
+    ) {
     }
 
-    /**
-     * @return list<array<string, mixed>>
-     */
-    public function all(bool $enabledOnly = false): array
+    /** @return list<array<string, mixed>> */
+    public function all(bool $enabledOnly, Context $context): array
     {
-        $sql = 'SELECT * FROM extension_mesh_repository_connection';
+        $criteria = (new Criteria())->addSorting(new FieldSorting('createdAt'));
         if ($enabledOnly) {
-            $sql .= ' WHERE enabled = 1';
+            $criteria->addFilter(new EqualsFilter('enabled', true));
         }
-        $sql .= ' ORDER BY created_at';
 
-        return \array_map($this->hydrate(...), $this->connection->fetchAllAssociative($sql));
+        return $this->hydrateMany($this->connections->search($criteria, $context)->getElements());
     }
 
-    /**
-     * @return array{
-     *     items: list<array<string, mixed>>,
-     *     total: int,
-     *     page: int,
-     *     limit: int
-     * }
-     */
-    public function paginate(int $page, int $limit): array
-    {
-        $total = (int) $this->connection->fetchOne(
-            'SELECT COUNT(*) FROM extension_mesh_repository_connection'
-        );
-        $page = \min($page, \max(1, (int) \ceil($total / $limit)));
-        $rows = $this->connection->fetchAllAssociative(
-            'SELECT *
-               FROM extension_mesh_repository_connection
-              ORDER BY created_at, id
-              LIMIT :limit OFFSET :offset',
-            [
-                'limit' => $limit,
-                'offset' => ($page - 1) * $limit,
-            ],
-            [
-                'limit' => ParameterType::INTEGER,
-                'offset' => ParameterType::INTEGER,
-            ]
-        );
-
-        return [
-            'items' => \array_map($this->hydrate(...), $rows),
-            'total' => $total,
-            'page' => $page,
-            'limit' => $limit,
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    public function get(string $id): ?array
+    /** @return array<string, mixed>|null */
+    public function get(string $id, Context $context): ?array
     {
         if (!Uuid::isValid($id)) {
             return null;
         }
-        $row = $this->connection->fetchAssociative(
-            'SELECT * FROM extension_mesh_repository_connection WHERE id = :id',
-            ['id' => Uuid::fromHexToBytes($id)]
-        );
+        $entity = $this->connections->search(new Criteria([$id]), $context)->first();
 
-        return $row === false ? null : $this->hydrate($row);
+        return $entity instanceof RepositoryConnectionEntity ? $this->hydrate($entity) : null;
     }
 
     public function create(
@@ -90,25 +58,27 @@ final class RepositoryConnectionRepository
         ?string $credentialFingerprint,
         ?string $productId,
         ?string $technicalName,
-        ?string $configPath
+        ?string $configPath,
+        Context $context
     ): string {
         $id = Uuid::randomHex();
-        $this->connection->insert('extension_mesh_repository_connection', [
-            'id' => Uuid::fromHexToBytes($id),
+        $this->connections->create([[
+            'id' => $id,
             'provider' => $provider,
             'repository' => $repository,
-            'api_base_url' => $apiBaseUrl,
-            'web_url' => $webUrl,
-            'default_branch' => $defaultBranch,
-            'repository_private' => $private ? 1 : 0,
-            'credential_ciphertext' => $credentialCiphertext,
-            'credential_fingerprint' => $credentialFingerprint,
-            'product_id' => $productId === null ? null : Uuid::fromHexToBytes($productId),
-            'technical_name' => $technicalName,
-            'config_path' => $configPath,
-            'enabled' => 1,
-            'created_at' => $this->now(),
-        ]);
+            'apiBaseUrl' => $apiBaseUrl,
+            'webUrl' => $webUrl,
+            'defaultBranch' => $defaultBranch,
+            'repositoryPrivate' => $private,
+            'credentialCiphertext' => $credentialCiphertext,
+            'credentialFingerprint' => $credentialFingerprint,
+            'productId' => $productId,
+            'productVersionId' => $productId === null ? null : Defaults::LIVE_VERSION,
+            'technicalName' => $technicalName,
+            'configPath' => $configPath,
+            'onboardingStatus' => 'ready',
+            'enabled' => true,
+        ]], $context);
 
         return $id;
     }
@@ -120,255 +90,143 @@ final class RepositoryConnectionRepository
         ?string $credentialCiphertext,
         ?string $credentialFingerprint,
         ?string $productId,
-        string $mode
+        string $mode,
+        Context $context
     ): string {
         $id = Uuid::randomHex();
-        $this->connection->insert('extension_mesh_repository_connection', [
-            'id' => Uuid::fromHexToBytes($id),
+        $this->connections->create([[
+            'id' => $id,
             'provider' => $provider,
             'repository' => $repository,
-            'api_base_url' => $apiBaseUrl,
-            'repository_private' => $credentialCiphertext === null ? 0 : 1,
-            'credential_ciphertext' => $credentialCiphertext,
-            'credential_fingerprint' => $credentialFingerprint,
-            'product_id' => $productId === null ? null : Uuid::fromHexToBytes($productId),
-            'onboarding_mode' => $mode,
-            'onboarding_status' => 'queued',
-            'onboarding_stage' => 'inspect',
-            'enabled' => 0,
-            'created_at' => $this->now(),
-        ]);
+            'apiBaseUrl' => $apiBaseUrl,
+            'repositoryPrivate' => $credentialCiphertext !== null,
+            'credentialCiphertext' => $credentialCiphertext,
+            'credentialFingerprint' => $credentialFingerprint,
+            'productId' => $productId,
+            'productVersionId' => $productId === null ? null : Defaults::LIVE_VERSION,
+            'onboardingMode' => $mode,
+            'onboardingStatus' => 'queued',
+            'onboardingStage' => 'inspect',
+            'enabled' => false,
+        ]], $context);
 
         return $id;
     }
 
-    public function exists(
-        string $provider,
-        string $repository,
-        string $apiBaseUrl,
-        ?string $excludeId = null
-    ): bool
+    public function exists(string $provider, string $repository, string $apiBaseUrl, ?string $excludeId, Context $context): bool
     {
-        $exclude = '';
-        $parameters = [
-            'provider' => $provider,
-            'repository' => $repository,
-            'apiBaseUrl' => $apiBaseUrl,
-        ];
+        $criteria = (new Criteria())
+            ->addFilter(new EqualsFilter('provider', $provider))
+            ->addFilter(new EqualsFilter('repository', $repository))
+            ->addFilter(new EqualsFilter('apiBaseUrl', $apiBaseUrl))
+            ->setLimit(1);
+        $ids = $this->connections->searchIds($criteria, $context)->getIds();
         if ($excludeId !== null && Uuid::isValid($excludeId)) {
-            $exclude = ' AND id != :excludeId';
-            $parameters['excludeId'] = Uuid::fromHexToBytes($excludeId);
+            $ids = \array_values(\array_diff($ids, [$excludeId]));
         }
 
-        return (bool) $this->connection->fetchOne(
-            'SELECT 1
-               FROM extension_mesh_repository_connection
-              WHERE provider = :provider
-                AND repository = :repository
-                AND api_base_url = :apiBaseUrl'
-                . $exclude,
-            $parameters
-        );
+        return $ids !== [];
     }
 
-    public function updateCredential(string $id, ?string $ciphertext, ?string $fingerprint): void
+    public function updateCredential(string $id, ?string $ciphertext, ?string $fingerprint, Context $context): void
     {
-        $this->connection->update(
-            'extension_mesh_repository_connection',
-            [
-                'credential_ciphertext' => $ciphertext,
-                'credential_fingerprint' => $fingerprint,
-                'updated_at' => $this->now(),
-            ],
-            ['id' => Uuid::fromHexToBytes($id)]
-        );
+        $this->update($id, ['credentialCiphertext' => $ciphertext, 'credentialFingerprint' => $fingerprint], $context);
     }
 
-    /**
-     * @param array{
-     *     repository: string,
-     *     apiBaseUrl: string,
-     *     webUrl: string,
-     *     defaultBranch: string,
-     *     private: bool
-     * } $inspection
-     */
-    public function storeInspection(string $id, array $inspection): void
+    /** @param array{repository: string, apiBaseUrl: string, webUrl: string, defaultBranch: string, private: bool} $inspection */
+    public function storeInspection(string $id, array $inspection, Context $context): void
     {
-        $this->connection->update(
-            'extension_mesh_repository_connection',
-            [
-                'repository' => $inspection['repository'],
-                'api_base_url' => $inspection['apiBaseUrl'],
-                'web_url' => $inspection['webUrl'],
-                'default_branch' => $inspection['defaultBranch'],
-                'repository_private' => $inspection['private'] ? 1 : 0,
-                'onboarding_status' => 'preparing',
-                'onboarding_stage' => 'prepare',
-                'last_error' => null,
-                'updated_at' => $this->now(),
-            ],
-            ['id' => Uuid::fromHexToBytes($id)]
-        );
+        $this->update($id, [
+            'repository' => $inspection['repository'],
+            'apiBaseUrl' => $inspection['apiBaseUrl'],
+            'webUrl' => $inspection['webUrl'],
+            'defaultBranch' => $inspection['defaultBranch'],
+            'repositoryPrivate' => $inspection['private'],
+            'onboardingStatus' => 'preparing',
+            'onboardingStage' => 'prepare',
+            'lastError' => null,
+        ], $context);
     }
 
-    public function reserveProduct(string $id, string $productId): void
+    public function markPrepared(string $id, string $productId, string $technicalName, ?string $configPath, Context $context): void
     {
-        $this->connection->update(
-            'extension_mesh_repository_connection',
-            [
-                'product_id' => Uuid::fromHexToBytes($productId),
-                'updated_at' => $this->now(),
-            ],
-            ['id' => Uuid::fromHexToBytes($id)]
-        );
+        $this->update($id, [
+            'productId' => $productId,
+            'productVersionId' => Defaults::LIVE_VERSION,
+            'technicalName' => $technicalName,
+            'configPath' => $configPath,
+            'onboardingStatus' => 'synchronizing',
+            'onboardingStage' => 'synchronize',
+            'lastError' => null,
+            'enabled' => true,
+        ], $context);
     }
 
-    public function markPrepared(
-        string $id,
-        string $productId,
-        string $technicalName,
-        ?string $configPath
-    ): void {
-        $this->connection->update(
-            'extension_mesh_repository_connection',
-            [
-                'product_id' => Uuid::fromHexToBytes($productId),
-                'technical_name' => $technicalName,
-                'config_path' => $configPath,
-                'onboarding_status' => 'synchronizing',
-                'onboarding_stage' => 'synchronize',
-                'last_error' => null,
-                'enabled' => 1,
-                'updated_at' => $this->now(),
-            ],
-            ['id' => Uuid::fromHexToBytes($id)]
-        );
-    }
-
-    public function markProcessing(string $id, string $status, ?string $stage = null): void
+    public function markProcessing(string $id, string $status, ?string $stage, Context $context): void
     {
-        $this->connection->update(
-            'extension_mesh_repository_connection',
-            [
-                'onboarding_status' => $status,
-                'onboarding_stage' => $stage,
-                'last_error' => null,
-                'updated_at' => $this->now(),
-            ],
-            ['id' => Uuid::fromHexToBytes($id)]
-        );
+        $this->update($id, ['onboardingStatus' => $status, 'onboardingStage' => $stage, 'lastError' => null], $context);
     }
 
-    public function setProductAndMetadata(
-        string $id,
-        string $productId,
-        string $technicalName,
-        ?string $configPath
-    ): void {
-        $this->connection->update(
-            'extension_mesh_repository_connection',
-            [
-                'product_id' => Uuid::fromHexToBytes($productId),
-                'technical_name' => $technicalName,
-                'config_path' => $configPath,
-                'updated_at' => $this->now(),
-            ],
-            ['id' => Uuid::fromHexToBytes($id)]
-        );
-    }
-
-    public function setTechnicalName(string $id, string $technicalName): void
+    public function setProductAndMetadata(string $id, string $productId, string $technicalName, ?string $configPath, Context $context): void
     {
-        $this->connection->update(
-            'extension_mesh_repository_connection',
-            ['technical_name' => $technicalName, 'updated_at' => $this->now()],
-            ['id' => Uuid::fromHexToBytes($id)]
-        );
+        $this->update($id, [
+            'productId' => $productId,
+            'productVersionId' => Defaults::LIVE_VERSION,
+            'technicalName' => $technicalName,
+            'configPath' => $configPath,
+        ], $context);
     }
 
-    public function markSynchronized(string $id): void
+    public function setTechnicalName(string $id, string $technicalName, Context $context): void
     {
-        $this->connection->update(
-            'extension_mesh_repository_connection',
-            [
-                'onboarding_status' => 'ready',
-                'onboarding_stage' => null,
-                'last_synced_at' => $this->now(),
-                'last_error' => null,
-                'updated_at' => $this->now(),
-            ],
-            ['id' => Uuid::fromHexToBytes($id)]
-        );
+        $this->update($id, ['technicalName' => $technicalName], $context);
     }
 
-    public function markFailed(string $id, string $message): void
+    public function markSynchronized(string $id, Context $context): void
     {
-        $this->connection->update(
-            'extension_mesh_repository_connection',
-            [
-                'onboarding_status' => 'failed',
-                'last_error' => \mb_substr($message, 0, 65535),
-                'updated_at' => $this->now(),
-            ],
-            ['id' => Uuid::fromHexToBytes($id)]
-        );
+        $this->update($id, [
+            'onboardingStatus' => 'ready',
+            'onboardingStage' => null,
+            'lastSyncedAt' => new \DateTimeImmutable(),
+            'lastError' => null,
+        ], $context);
     }
 
-    public function delete(string $id): void
+    public function markFailed(string $id, string $message, Context $context): void
+    {
+        $this->update($id, ['onboardingStatus' => 'failed', 'lastError' => \mb_substr($message, 0, 65535)], $context);
+    }
+
+    public function delete(string $id, Context $context): void
     {
         if (Uuid::isValid($id)) {
-            $this->connection->delete(
-                'extension_mesh_repository_connection',
-                ['id' => Uuid::fromHexToBytes($id)]
-            );
+            $this->connections->delete([['id' => $id]], $context);
         }
     }
 
-    public function hasImportedAsset(string $connectionId, string $releaseId, string $assetId): bool
+    public function hasImportedAsset(string $connectionId, string $releaseId, string $assetId, Context $context): bool
     {
-        return (bool) $this->connection->fetchOne(
-            'SELECT 1
-               FROM extension_mesh_repository_release
-              WHERE connection_id = :connectionId
-                AND provider_release_id = :releaseId
-                AND provider_asset_id = :assetId',
-            [
-                'connectionId' => Uuid::fromHexToBytes($connectionId),
-                'releaseId' => $releaseId,
-                'assetId' => $assetId,
-            ]
-        );
+        return $this->releaseExists([
+            new EqualsFilter('connectionId', $connectionId),
+            new EqualsFilter('providerReleaseId', $releaseId),
+            new EqualsFilter('providerAssetId', $assetId),
+        ], $context);
     }
 
-    public function hasImportedRelease(string $connectionId, string $releaseId): bool
+    public function hasImportedRelease(string $connectionId, string $releaseId, Context $context): bool
     {
-        return (bool) $this->connection->fetchOne(
-            'SELECT 1
-               FROM extension_mesh_repository_release
-              WHERE connection_id = :connectionId
-                AND provider_release_id = :releaseId
-              LIMIT 1',
-            [
-                'connectionId' => Uuid::fromHexToBytes($connectionId),
-                'releaseId' => $releaseId,
-            ]
-        );
+        return $this->releaseExists([
+            new EqualsFilter('connectionId', $connectionId),
+            new EqualsFilter('providerReleaseId', $releaseId),
+        ], $context);
     }
 
-    public function hasImportedVersion(string $connectionId, string $version): bool
+    public function hasImportedVersion(string $connectionId, string $version, Context $context): bool
     {
-        return (bool) $this->connection->fetchOne(
-            'SELECT 1
-               FROM extension_mesh_repository_release
-              WHERE connection_id = :connectionId
-                AND version = :version
-              LIMIT 1',
-            [
-                'connectionId' => Uuid::fromHexToBytes($connectionId),
-                'version' => $version,
-            ]
-        );
+        return $this->releaseExists([
+            new EqualsFilter('connectionId', $connectionId),
+            new EqualsFilter('version', $version),
+        ], $context);
     }
 
     public function recordImportedAsset(
@@ -382,39 +240,43 @@ final class RepositoryConnectionRepository
         string $sha256,
         string $mediaId,
         string $productDownloadId,
-        string $releasedAt
+        string $releasedAt,
+        Context $context
     ): void {
-        $date = (new \DateTimeImmutable($releasedAt))->format('Y-m-d H:i:s.v');
-        $this->connection->insert('extension_mesh_repository_release', [
-            'id' => Uuid::fromHexToBytes(Uuid::randomHex()),
-            'connection_id' => Uuid::fromHexToBytes($connectionId),
-            'provider_release_id' => $releaseId,
-            'provider_asset_id' => $assetId,
+        $this->releases->create([[
+            'id' => Uuid::randomHex(),
+            'connectionId' => $connectionId,
+            'providerReleaseId' => $releaseId,
+            'providerAssetId' => $assetId,
             'tag' => $tag,
-            'asset_name' => $assetName,
+            'assetName' => $assetName,
             'version' => $version,
-            'release_notes' => $releaseNotes,
+            'releaseNotes' => $releaseNotes,
             'sha256' => $sha256,
-            'media_id' => Uuid::fromHexToBytes($mediaId),
-            'product_download_id' => Uuid::fromHexToBytes($productDownloadId),
-            'released_at' => $date,
-            'created_at' => $this->now(),
-        ]);
+            'mediaId' => $mediaId,
+            'productDownloadId' => $productDownloadId,
+            'productDownloadVersionId' => Defaults::LIVE_VERSION,
+            'releasedAt' => new \DateTimeImmutable($releasedAt),
+        ]], $context);
     }
 
     public function updateImportedReleaseNotes(
         string $connectionId,
         string $releaseId,
-        ?string $releaseNotes
-    ): void {
-        $this->connection->update(
-            'extension_mesh_repository_release',
-            ['release_notes' => $releaseNotes],
-            [
-                'connection_id' => Uuid::fromHexToBytes($connectionId),
-                'provider_release_id' => $releaseId,
-            ]
-        );
+        ?string $releaseNotes,
+        Context $context
+    ): void
+    {
+        $criteria = (new Criteria())
+            ->addFilter(new EqualsFilter('connectionId', $connectionId))
+            ->addFilter(new EqualsFilter('providerReleaseId', $releaseId));
+        $ids = $this->releases->searchIds($criteria, $context)->getIds();
+        if ($ids !== []) {
+            $this->releases->update(\array_map(
+                static fn (string $id): array => ['id' => $id, 'releaseNotes' => $releaseNotes],
+                $ids
+            ), $context);
+        }
     }
 
     public function acquireLock(string $id): bool
@@ -433,56 +295,68 @@ final class RepositoryConnectionRepository
         );
     }
 
+    /** @param array<string, mixed> $values */
+    private function update(string $id, array $values, Context $context): void
+    {
+        if (Uuid::isValid($id)) {
+            $this->connections->update([['id' => $id, ...$values]], $context);
+        }
+    }
+
+    /** @param list<EqualsFilter> $filters */
+    private function releaseExists(array $filters, Context $context): bool
+    {
+        $criteria = (new Criteria())->setLimit(1);
+        foreach ($filters as $filter) {
+            $criteria->addFilter($filter);
+        }
+
+        return $this->releases->searchIds($criteria, $context)->getTotal() > 0;
+    }
+
     /**
-     * @param array<string, mixed> $row
+     * @param array<string, RepositoryConnectionEntity> $entities
      *
-     * @return array<string, mixed>
+     * @return list<array<string, mixed>>
      */
-    private function hydrate(array $row): array
+    private function hydrateMany(array $entities): array
+    {
+        return \array_values(\array_map(
+            fn (RepositoryConnectionEntity $entity): array => $this->hydrate($entity),
+            $entities
+        ));
+    }
+
+    /** @return array<string, mixed> */
+    private function hydrate(RepositoryConnectionEntity $entity): array
     {
         return [
-            'id' => Uuid::fromBytesToHex((string) $row['id']),
-            'provider' => (string) $row['provider'],
-            'repository' => (string) $row['repository'],
-            'apiBaseUrl' => (string) $row['api_base_url'],
-            'webUrl' => \is_string($row['web_url'] ?? null) ? $row['web_url'] : null,
-            'defaultBranch' => \is_string($row['default_branch'] ?? null) ? $row['default_branch'] : null,
-            'private' => (bool) $row['repository_private'],
-            'credentialCiphertext' => \is_string($row['credential_ciphertext'] ?? null)
-                ? $row['credential_ciphertext']
-                : null,
-            'credentialFingerprint' => \is_string($row['credential_fingerprint'] ?? null)
-                ? $row['credential_fingerprint']
-                : null,
-            'productId' => $row['product_id'] === null
-                ? null
-                : Uuid::fromBytesToHex((string) $row['product_id']),
-            'technicalName' => \is_string($row['technical_name'] ?? null) ? $row['technical_name'] : null,
-            'configPath' => \is_string($row['config_path'] ?? null) ? $row['config_path'] : null,
-            'onboardingMode' => \is_string($row['onboarding_mode'] ?? null)
-                ? $row['onboarding_mode']
-                : null,
-            'onboardingStatus' => \is_string($row['onboarding_status'] ?? null)
-                ? $row['onboarding_status']
-                : 'ready',
-            'onboardingStage' => \is_string($row['onboarding_stage'] ?? null)
-                ? $row['onboarding_stage']
-                : null,
-            'enabled' => (bool) $row['enabled'],
-            'lastSyncedAt' => \is_string($row['last_synced_at'] ?? null) ? $row['last_synced_at'] : null,
-            'lastError' => \is_string($row['last_error'] ?? null) ? $row['last_error'] : null,
-            'createdAt' => (string) $row['created_at'],
-            'updatedAt' => \is_string($row['updated_at'] ?? null) ? $row['updated_at'] : null,
+            'id' => $entity->getId(),
+            'provider' => $entity->getProvider(),
+            'repository' => $entity->getRepository(),
+            'apiBaseUrl' => $entity->getApiBaseUrl(),
+            'webUrl' => $entity->getWebUrl(),
+            'defaultBranch' => $entity->getDefaultBranch(),
+            'private' => $entity->isRepositoryPrivate(),
+            'credentialCiphertext' => $entity->getCredentialCiphertext(),
+            'credentialFingerprint' => $entity->getCredentialFingerprint(),
+            'productId' => $entity->getProductId(),
+            'technicalName' => $entity->getTechnicalName(),
+            'configPath' => $entity->getConfigPath(),
+            'onboardingMode' => $entity->getOnboardingMode(),
+            'onboardingStatus' => $entity->getOnboardingStatus(),
+            'onboardingStage' => $entity->getOnboardingStage(),
+            'enabled' => $entity->isEnabled(),
+            'lastSyncedAt' => $this->date($entity->getLastSyncedAt()),
+            'lastError' => $entity->getLastError(),
+            'createdAt' => $this->date($entity->getCreatedAt()) ?? '',
+            'updatedAt' => $this->date($entity->getUpdatedAt()),
         ];
     }
 
-    private function now(): string
+    private function date(mixed $value): ?string
     {
-        return $this->date(new \DateTimeImmutable());
+        return $value instanceof \DateTimeInterface ? $value->format('Y-m-d H:i:s.v') : null;
     }
 
-    private function date(\DateTimeImmutable $date): string
-    {
-        return $date->format('Y-m-d H:i:s.v');
-    }
 }

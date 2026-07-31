@@ -28,8 +28,8 @@ final class PublisherCatalogService
         Context $context
     ): array {
         $this->synchronizer->synchronize($context);
-        $productIds = $this->entitlements->entitledProductIds($customerId, $salesChannelId);
-        $published = $this->releases->validForProducts($productIds);
+        $productIds = $this->entitlements->entitledProductIds($customerId, $salesChannelId, $context);
+        $published = $this->releases->validForProducts($productIds, $context);
 
         /** @var array<string, array<string, mixed>> $extensions */
         $extensions = [];
@@ -95,30 +95,4 @@ final class PublisherCatalogService
         ];
     }
 
-    /**
-     * @return array{
-     *     data: list<array<string, mixed>>,
-     *     total: int,
-     *     page: int,
-     *     limit: int
-     * }
-     */
-    public function publicationStatus(
-        Context $context,
-        int $page,
-        int $limit,
-        bool $synchronize = true
-    ): array {
-        if ($synchronize) {
-            $this->synchronizer->synchronize($context);
-        }
-        $result = $this->releases->paginate($page, $limit);
-
-        return [
-            'data' => $result['items'],
-            'total' => $result['total'],
-            'page' => $result['page'],
-            'limit' => $result['limit'],
-        ];
-    }
 }

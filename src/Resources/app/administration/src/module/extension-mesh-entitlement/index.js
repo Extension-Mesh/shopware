@@ -20,7 +20,7 @@ Module.register('extension-mesh-entitlement', {
             component: 'extension-mesh-entitlement-list',
             path: 'index',
             meta: {
-                privilege: 'system.plugin_maintain',
+                privilege: 'extension_mesh.viewer',
             },
         },
         create: {
@@ -28,7 +28,7 @@ Module.register('extension-mesh-entitlement', {
             path: 'create',
             meta: {
                 parentPath: 'extension.mesh.entitlement.index',
-                privilege: 'system.plugin_maintain',
+                privilege: 'extension_mesh.creator',
             },
         },
         detail: {
@@ -36,7 +36,7 @@ Module.register('extension-mesh-entitlement', {
             path: 'detail/:id',
             meta: {
                 parentPath: 'extension.mesh.entitlement.index',
-                privilege: 'system.plugin_maintain',
+                privilege: 'extension_mesh.editor',
             },
             props: {
                 default: (route) => ({
@@ -53,7 +53,7 @@ Module.register('extension-mesh-entitlement', {
             label: 'extension-mesh.entitlements.menuLabel',
             parent: 'sw-order',
             position: 20,
-            privilege: 'system.plugin_maintain',
+            privilege: 'extension_mesh.viewer',
         },
     ],
 });

@@ -5,6 +5,7 @@ namespace ExtensionMesh\Shopware\ScheduledTask;
 use ExtensionMesh\Shopware\Service\RepositoryOnboardingService;
 use Psr\Log\LoggerInterface;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\MessageQueue\ScheduledTask\ScheduledTaskHandler;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
@@ -21,8 +22,9 @@ final class RepositorySyncTaskHandler extends ScheduledTaskHandler
 
     public function run(): void
     {
-        foreach ($this->onboarding->readyConnectionIds() as $id) {
-            $this->onboarding->queueSynchronization($id);
+        $context = Context::createCLIContext();
+        foreach ($this->onboarding->readyConnectionIds($context) as $id) {
+            $this->onboarding->queueSynchronization($id, $context);
         }
     }
 }

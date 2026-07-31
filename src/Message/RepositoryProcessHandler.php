@@ -23,13 +23,14 @@ final class RepositoryProcessHandler
     public function __invoke(RepositoryProcessMessage $message): void
     {
         $id = $message->getConnectionId();
-        if (!$this->onboarding->hasConnection($id)) {
+        $context = Context::createCLIContext();
+        if (!$this->onboarding->hasConnection($id, $context)) {
             return;
         }
 
         try {
             if ($message->getStage() === RepositoryProcessMessage::STAGE_INSPECT) {
-                if ($this->onboarding->inspectQueued($id)) {
+                if ($this->onboarding->inspectQueued($id, $context)) {
                     $this->dispatch($id, RepositoryProcessMessage::STAGE_PREPARE);
                 }
 
@@ -38,7 +39,7 @@ final class RepositoryProcessHandler
             if ($message->getStage() === RepositoryProcessMessage::STAGE_PREPARE) {
                 $result = $this->onboarding->prepareQueued(
                     $id,
-                    Context::createCLIContext(),
+                    $context,
                     $message->getOffset()
                 );
                 if ($result['prepared']) {
@@ -57,10 +58,10 @@ final class RepositoryProcessHandler
                 throw ExtensionMeshException::invalidRepository('the repository queue stage is invalid.');
             }
 
-            $this->onboarding->markSynchronizing($id);
+            $this->onboarding->markSynchronizing($id, $context);
             $result = $this->synchronizer->synchronizeBatch(
                 $id,
-                Context::createCLIContext(),
+                $context,
                 $message->getOffset()
             );
             if (!$result['finished'] && \is_int($result['nextOffset'])) {
@@ -73,7 +74,7 @@ final class RepositoryProcessHandler
                 $this->messageBus->dispatch(new PublicationSyncMessage());
             }
         } catch (\Throwable $exception) {
-            $this->onboarding->markFailed($id, $exception->getMessage());
+            $this->onboarding->markFailed($id, $exception->getMessage(), $context);
             if ($exception instanceof ExtensionMeshException) {
                 throw new UnrecoverableMessageHandlingException(
                     $exception->getMessage(),

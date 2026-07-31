@@ -2,12 +2,13 @@
 
 namespace ExtensionMesh\Shopware\Test\Unit\Service;
 
-use Doctrine\DBAL\Connection;
-use ExtensionMesh\Shopware\Infrastructure\Persistence\PublicationRepository;
+use ExtensionMesh\Shopware\Infrastructure\Persistence\PublicationReader;
 use ExtensionMesh\Shopware\Service\StorefrontDownloadCatalog;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Checkout\Order\Aggregate\OrderLineItemDownload\OrderLineItemDownloadEntity;
 use Shopware\Core\Framework\Uuid\Uuid;
+use Shopware\Core\Framework\Context;
+use Symfony\Component\HttpFoundation\RequestStack;
 
 final class StorefrontDownloadCatalogTest extends TestCase
 {
@@ -18,14 +19,14 @@ final class StorefrontDownloadCatalogTest extends TestCase
         $mediaV2Duplicate = Uuid::randomHex();
         $newerShopwareMedia = Uuid::randomHex();
         $normalMedia = Uuid::randomHex();
-        $connection = $this->createMock(Connection::class);
-        $connection->method('fetchAllAssociative')->willReturn([
-            $this->releaseRow($mediaV1, '1.2.0', '^6.6'),
-            $this->releaseRow($mediaV2Duplicate, '1.10.0', '^6.6'),
-            $this->releaseRow($mediaV2, '1.10.0', '^6.6', 'Fixes the important issue.'),
-            $this->releaseRow($newerShopwareMedia, '2.0.0', '~6.7.0'),
+        $releases = $this->createMock(PublicationReader::class);
+        $releases->method('byMediaIds')->willReturn([
+            $mediaV1 => $this->release($mediaV1, '1.2.0', '^6.6'),
+            $mediaV2Duplicate => $this->release($mediaV2Duplicate, '1.10.0', '^6.6'),
+            $mediaV2 => $this->release($mediaV2, '1.10.0', '^6.6', 'Fixes the important issue.'),
+            $newerShopwareMedia => $this->release($newerShopwareMedia, '2.0.0', '~6.7.0'),
         ]);
-        $catalog = new StorefrontDownloadCatalog(new PublicationRepository($connection));
+        $catalog = new StorefrontDownloadCatalog($releases, new RequestStack());
         $normal = $this->download($normalMedia);
 
         $result = $catalog->group([
@@ -34,7 +35,7 @@ final class StorefrontDownloadCatalogTest extends TestCase
             $this->download($mediaV2Duplicate),
             $this->download($mediaV2),
             $this->download($newerShopwareMedia),
-        ]);
+        ], Context::createCLIContext());
 
         self::assertSame([$normal], $result['normal']);
         self::assertCount(2, $result['groups']);
@@ -70,7 +71,7 @@ final class StorefrontDownloadCatalogTest extends TestCase
     /**
      * @return array<string, mixed>
      */
-    private function releaseRow(
+    private function release(
         string $mediaId,
         string $version,
         string $shopware,
@@ -78,22 +79,22 @@ final class StorefrontDownloadCatalogTest extends TestCase
     ): array
     {
         return [
-            'id' => Uuid::fromHexToBytes(Uuid::randomHex()),
-            'product_download_id' => Uuid::fromHexToBytes(Uuid::randomHex()),
-            'product_id' => Uuid::fromHexToBytes(Uuid::randomHex()),
-            'media_id' => Uuid::fromHexToBytes($mediaId),
+            'id' => Uuid::randomHex(),
+            'downloadId' => Uuid::randomHex(),
+            'productId' => Uuid::randomHex(),
+            'mediaId' => $mediaId,
             'fingerprint' => \hash('sha256', $mediaId),
-            'technical_name' => 'ExamplePlugin',
+            'technicalName' => 'ExamplePlugin',
             'version' => $version,
-            'metadata' => \json_encode([
+            'metadata' => [
                 'name' => 'ExamplePlugin',
                 'version' => $version,
                 'shopware' => $shopware,
                 'releaseNotes' => $releaseNotes,
-            ], \JSON_THROW_ON_ERROR),
+            ],
             'sha256' => \hash('sha256', $version),
-            'validation_error' => null,
-            'created_at' => '2026-07-29 10:00:00.000',
+            'validationError' => null,
+            'releasedAt' => '2026-07-29T10:00:00Z',
         ];
     }
 }

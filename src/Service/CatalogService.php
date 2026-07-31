@@ -8,6 +8,7 @@ use ExtensionMesh\Shopware\Infrastructure\Http\SafeHttpClient;
 use ExtensionMesh\Shopware\Infrastructure\Persistence\ExtensionOwnershipRepository;
 use ExtensionMesh\Shopware\Infrastructure\Persistence\RegistrySourceRepository;
 use ExtensionMesh\Shopware\Infrastructure\Security\CredentialCipher;
+use Shopware\Core\Framework\Context;
 
 final class CatalogService
 {
@@ -23,7 +24,7 @@ final class CatalogService
     ) {
     }
 
-    public function addSource(string $inputUrl, ?string $accessToken = null): string
+    public function addSource(string $inputUrl, ?string $accessToken, Context $context): string
     {
         $normalizedUrl = $this->urlNormalizer->normalize($inputUrl);
         $accessToken = $this->normalizeCredential($accessToken);
@@ -36,13 +37,14 @@ final class CatalogService
             $registry['name'],
             $json,
             $accessToken === null ? null : $this->credentialCipher->encrypt($accessToken),
-            $accessToken === null ? null : $this->credentialCipher->fingerprint($accessToken)
+            $accessToken === null ? null : $this->credentialCipher->fingerprint($accessToken),
+            $context
         );
     }
 
-    public function updateCredential(string $sourceId, ?string $accessToken): void
+    public function updateCredential(string $sourceId, ?string $accessToken, Context $context): void
     {
-        $source = $this->sources->get($sourceId);
+        $source = $this->sources->get($sourceId, $context);
         $accessToken = $this->normalizeCredential($accessToken);
         $json = $this->httpClient->getRegistry($source['normalizedUrl'], $accessToken);
         $registry = $this->parser->parse($json);
@@ -51,21 +53,22 @@ final class CatalogService
             $accessToken === null ? null : $this->credentialCipher->encrypt($accessToken),
             $accessToken === null ? null : $this->credentialCipher->fingerprint($accessToken),
             $registry['name'],
-            $json
+            $json,
+            $context
         );
     }
 
-    public function refreshAll(): void
+    public function refreshAll(Context $context): void
     {
-        foreach ($this->sources->all() as $source) {
+        foreach ($this->sources->all($context) as $source) {
             if (!$source['enabled']) {
                 continue;
             }
 
             try {
-                $this->refreshSource($source);
+                $this->refreshSource($source, $context);
             } catch (ExtensionMeshException $exception) {
-                $this->sources->recordError($source['id'], $exception->getMessage());
+                $this->sources->recordError($source['id'], $exception->getMessage(), $context);
             }
         }
     }
@@ -76,19 +79,19 @@ final class CatalogService
      *     warnings: list<array{registryId: string, message: string}>
      * }
      */
-    public function catalog(string $shopwareVersion, string $phpVersion, string $locale): array
+    public function catalog(string $shopwareVersion, string $phpVersion, string $locale, Context $context): array
     {
         $extensions = [];
         $warnings = [];
-        $ownership = $this->ownership->all();
+        $ownership = $this->ownership->all($context);
 
-        foreach ($this->sources->all() as $source) {
+        foreach ($this->sources->all($context) as $source) {
             if (!$source['enabled']) {
                 continue;
             }
 
             try {
-                $registry = $this->loadSource($source);
+                $registry = $this->loadSource($source, $context);
             } catch (ExtensionMeshException $exception) {
                 $warnings[] = ['registryId' => $source['id'], 'message' => $exception->getMessage()];
                 continue;
@@ -149,10 +152,10 @@ final class CatalogService
      *     changelogUrl: ?string
      * }
      */
-    public function release(string $registryId, string $technicalName, string $shopwareVersion, string $phpVersion): array
+    public function release(string $registryId, string $technicalName, string $shopwareVersion, string $phpVersion, Context $context): array
     {
-        $source = $this->sources->get($registryId);
-        $registry = $this->loadSource($source);
+        $source = $this->sources->get($registryId, $context);
+        $registry = $this->loadSource($source, $context);
 
         foreach ($registry['extensions'] as $extension) {
             if ($extension['name'] !== $technicalName) {
@@ -195,12 +198,13 @@ final class CatalogService
         string $registryId,
         string $technicalName,
         string $shopwareVersion,
-        string $phpVersion
+        string $phpVersion,
+        Context $context
     ): array {
-        $source = $this->sources->get($registryId);
+        $source = $this->sources->get($registryId, $context);
 
         return [
-            'release' => $this->release($registryId, $technicalName, $shopwareVersion, $phpVersion),
+            'release' => $this->release($registryId, $technicalName, $shopwareVersion, $phpVersion, $context),
             'accessToken' => $this->credentialCipher->decrypt($source['credentialCiphertext']),
             'credentialOrigin' => $this->origin($source['normalizedUrl']),
             'registryUrl' => $source['normalizedUrl'],
@@ -245,13 +249,13 @@ final class CatalogService
      *     }>
      * }
      */
-    private function loadSource(array $source): array
+    private function loadSource(array $source, Context $context): array
     {
         if ($this->isStale($source['lastRefreshedAt']) || $source['cachedRegistry'] === null) {
             try {
-                return $this->refreshSource($source);
+                return $this->refreshSource($source, $context);
             } catch (ExtensionMeshException $exception) {
-                $this->sources->recordError($source['id'], $exception->getMessage());
+                $this->sources->recordError($source['id'], $exception->getMessage(), $context);
                 if ($source['cachedRegistry'] === null) {
                     throw $exception;
                 }
@@ -294,14 +298,14 @@ final class CatalogService
      *     }>
      * }
      */
-    private function refreshSource(array $source): array
+    private function refreshSource(array $source, Context $context): array
     {
         $json = $this->httpClient->getRegistry(
             $source['normalizedUrl'],
             $this->credentialCipher->decrypt($source['credentialCiphertext'])
         );
         $registry = $this->parser->parse($json);
-        $this->sources->updateCache($source['id'], $registry['name'], $json);
+        $this->sources->updateCache($source['id'], $registry['name'], $json, $context);
 
         return $registry;
     }

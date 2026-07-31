@@ -21,8 +21,6 @@ services:
 
     ExtensionMesh\Shopware\Api\PublisherController:
         public: true
-        calls:
-            - [setContainer, ['@service_container']]
 
     ExtensionMesh\Shopware\Api\RepositoryController:
         public: true
@@ -83,6 +81,8 @@ services:
         arguments:
             $productRepository: '@product.repository'
             $mediaRepository: '@media.repository'
+            $taxRepository: '@tax.repository'
+            $languageRepository: '@language.repository'
 
     ExtensionMesh\Shopware\Service\RepositorySynchronizer:
         arguments:
@@ -101,6 +101,49 @@ services:
     ExtensionMesh\Shopware\ScheduledTask\RepositorySyncTaskHandler:
         arguments:
             $scheduledTaskRepository: '@scheduled_task.repository'
+
+    ExtensionMesh\Shopware\Infrastructure\Persistence\AccessTokenRepository:
+        arguments:
+            $repository: '@extension_mesh_access_token.repository'
+
+    ExtensionMesh\Shopware\Infrastructure\Persistence\EntitlementRepository:
+        arguments:
+            $repository: '@extension_mesh_entitlement.repository'
+            $orders: '@order.repository'
+            $products: '@product.repository'
+            $integratedProducts: '@extension_mesh_product.repository'
+            $connections: '@extension_mesh_repository_connection.repository'
+
+    ExtensionMesh\Shopware\Infrastructure\Persistence\ExtensionMeshProductRepository:
+        arguments:
+            $products: '@extension_mesh_product.repository'
+            $connections: '@extension_mesh_repository_connection.repository'
+
+    ExtensionMesh\Shopware\Infrastructure\Persistence\ExtensionOwnershipRepository:
+        arguments:
+            $repository: '@extension_mesh_extension_ownership.repository'
+
+    ExtensionMesh\Shopware\Infrastructure\Persistence\RegistrySourceRepository:
+        arguments:
+            $repository: '@extension_mesh_registry_source.repository'
+
+    ExtensionMesh\Shopware\Infrastructure\Persistence\RepositoryConnectionRepository:
+        arguments:
+            $connections: '@extension_mesh_repository_connection.repository'
+            $releases: '@extension_mesh_repository_release.repository'
+
+    ExtensionMesh\Shopware\Infrastructure\Persistence\PublicationRepository:
+        arguments:
+            $releases: '@extension_mesh_published_release.repository'
+            $productDownloads: '@product_download.repository'
+            $repositoryReleases: '@extension_mesh_repository_release.repository'
+
+    ExtensionMesh\Shopware\Infrastructure\Persistence\ProductDownloadCatalogRepository:
+        arguments:
+            $downloads: '@product_download.repository'
+
+    ExtensionMesh\Shopware\Infrastructure\Persistence\PublicationReader:
+        alias: ExtensionMesh\Shopware\Infrastructure\Persistence\PublicationRepository
 
 parameters:
     env(EXTENSION_MESH_ALLOW_PRIVATE_NETWORKS): '0'

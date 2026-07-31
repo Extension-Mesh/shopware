@@ -22,21 +22,21 @@ Module.register('extension-mesh-administration', {
                 name: 'extension.mesh.administration.index.registries',
             },
             meta: {
-                privilege: 'system.plugin_maintain',
+                privilege: 'extension_mesh.viewer',
             },
             children: {
                 registries: {
                     component: 'extension-mesh-registries',
                     path: 'registries',
                     meta: {
-                        privilege: 'system.plugin_maintain',
+                        privilege: 'extension_mesh.viewer',
                     },
                 },
                 repositories: {
                     component: 'extension-mesh-repositories',
                     path: 'repositories',
                     meta: {
-                        privilege: 'system.plugin_maintain',
+                        privilege: 'extension_mesh.viewer',
                     },
                 },
             },
@@ -50,7 +50,7 @@ Module.register('extension-mesh-administration', {
             label: 'Extension Mesh',
             parent: 'sw-extension',
             position: 20,
-            privilege: 'system.plugin_maintain',
+            privilege: 'extension_mesh.viewer',
         },
     ],
 });

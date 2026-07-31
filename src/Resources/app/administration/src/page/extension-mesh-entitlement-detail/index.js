@@ -5,28 +5,14 @@ const { Component, Mixin } = Shopware;
 
 Component.register('extension-mesh-entitlement-detail', {
     template,
-
-    inject: ['extensionMeshApiService'],
-
-    mixins: [
-        Mixin.getByName('notification'),
-    ],
-
+    inject: ['repositoryFactory'],
+    mixins: [Mixin.getByName('notification')],
     props: {
-        entitlementId: {
-            type: String,
-            required: true,
-        },
+        entitlementId: { type: String, required: true },
     },
-
     data() {
-        return {
-            isLoading: false,
-            isSaveSuccessful: false,
-            form: null,
-        };
+        return { isLoading: false, isSaveSuccessful: false, form: null };
     },
-
     computed: {
         canSave() {
             return !this.isLoading
@@ -35,47 +21,27 @@ Component.register('extension-mesh-entitlement-detail', {
                 && this.form?.salesChannelId;
         },
     },
-
-    created() {
-        this.loadEntitlement();
-    },
-
+    created() { this.loadEntitlement(); },
     methods: {
         async loadEntitlement() {
             this.isLoading = true;
             try {
-                const entitlement = await this.extensionMeshApiService.getEntitlement(
-                    this.entitlementId,
-                );
-                this.form = {
-                    customerId: entitlement.customerId,
-                    productId: entitlement.productId,
-                    salesChannelId: entitlement.salesChannelId,
-                    orderId: entitlement.orderId,
-                    enabled: entitlement.enabled,
-                    validUntil: entitlement.validUntil,
-                };
+                this.form = await this.repositoryFactory
+                    .create('extension_mesh_entitlement')
+                    .get(this.entitlementId, Shopware.Context.api);
             } catch (error) {
                 this.notifyError(error);
             } finally {
                 this.isLoading = false;
             }
         },
-
         async saveEntitlement() {
-            if (!this.canSave) {
-                return;
-            }
-
+            if (!this.canSave) return;
             this.isLoading = true;
             try {
-                await this.extensionMeshApiService.updateEntitlement(
-                    this.entitlementId,
-                    {
-                        ...this.form,
-                        orderId: this.form.orderId || null,
-                    },
-                );
+                await this.repositoryFactory
+                    .create('extension_mesh_entitlement')
+                    .save(this.form, Shopware.Context.api);
                 this.isSaveSuccessful = true;
             } catch (error) {
                 this.notifyError(error);
@@ -83,11 +49,7 @@ Component.register('extension-mesh-entitlement-detail', {
                 this.isLoading = false;
             }
         },
-
-        saveFinish() {
-            this.isSaveSuccessful = false;
-        },
-
+        saveFinish() { this.isSaveSuccessful = false; },
         notifyError(error) {
             this.createNotificationError({
                 message: error?.response?.data?.errors?.[0]?.detail

@@ -78,14 +78,15 @@ final class PublisherController extends AbstractController
         try {
             $token = $this->authenticate($request, $salesChannelContext);
             $this->synchronizer->synchronize($salesChannelContext->getContext());
-            $release = $this->releases->get($releaseId);
+            $release = $this->releases->get($releaseId, $salesChannelContext->getContext());
             if (
                 $release === null
                 || $release['validationError'] !== null
                 || !$this->entitlements->isEntitled(
                     $token['customerId'],
                     $release['productId'],
-                    $token['salesChannelId']
+                    $token['salesChannelId'],
+                    $salesChannelContext->getContext()
                 )
             ) {
                 throw ExtensionMeshException::accessDenied('this release is not covered by an active entitlement.');
@@ -128,7 +129,10 @@ final class PublisherController extends AbstractController
      */
     private function authenticate(Request $request, SalesChannelContext $context): array
     {
-        $token = $this->tokens->authenticate($request->headers->get('Authorization'));
+        $token = $this->tokens->authenticate(
+            $request->headers->get('Authorization'),
+            $context->getContext()
+        );
         if ($token['salesChannelId'] !== $context->getSalesChannelId()) {
             throw ExtensionMeshException::accessDenied('the token belongs to another sales channel.');
         }

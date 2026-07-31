@@ -2,56 +2,39 @@
 
 namespace ExtensionMesh\Shopware\Infrastructure\Persistence;
 
-use Doctrine\DBAL\Connection;
+use ExtensionMesh\Shopware\Core\Content\ExtensionOwnership\ExtensionOwnershipEntity;
+use ExtensionMesh\Shopware\Core\Content\ExtensionOwnership\ExtensionOwnershipCollection;
+use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 
 final class ExtensionOwnershipRepository
 {
-    public function __construct(private readonly Connection $connection)
+    public function __construct(
+        /** @var EntityRepository<ExtensionOwnershipCollection> */
+        private readonly EntityRepository $repository
+    )
     {
     }
 
-    /**
-     * @return array<string, string>
-     */
-    public function all(): array
+    /** @return array<string, string> */
+    public function all(Context $context): array
     {
-        $rows = $this->connection->fetchAllKeyValue(
-            'SELECT `technical_name`, `registry_url`
-               FROM `extension_mesh_extension_ownership`'
-        );
-
         $ownership = [];
-        foreach ($rows as $technicalName => $registryUrl) {
-            if (\is_string($technicalName) && \is_string($registryUrl)) {
-                $ownership[$technicalName] = $registryUrl;
-            }
+        $entities = $this->repository->search(new Criteria(), $context);
+        foreach ($entities as $entity) {
+            $ownership[$entity->getTechnicalName()] = $entity->getRegistryUrl();
         }
 
         return $ownership;
     }
 
-    public function markPrepared(string $technicalName, string $registryUrl): void
+    public function markPrepared(string $technicalName, string $registryUrl, Context $context): void
     {
-        $this->connection->executeStatement(
-            <<<'SQL'
-                INSERT INTO `extension_mesh_extension_ownership` (
-                    `technical_name`,
-                    `registry_url`,
-                    `prepared_at`
-                ) VALUES (
-                    :technicalName,
-                    :registryUrl,
-                    :preparedAt
-                )
-                ON DUPLICATE KEY UPDATE
-                    `registry_url` = VALUES(`registry_url`),
-                    `prepared_at` = VALUES(`prepared_at`)
-            SQL,
-            [
-                'technicalName' => $technicalName,
-                'registryUrl' => $registryUrl,
-                'preparedAt' => (new \DateTimeImmutable())->format('Y-m-d H:i:s.v'),
-            ]
-        );
+        $this->repository->upsert([[
+            'technicalName' => $technicalName,
+            'registryUrl' => $registryUrl,
+            'preparedAt' => new \DateTimeImmutable(),
+        ]], $context);
     }
 }

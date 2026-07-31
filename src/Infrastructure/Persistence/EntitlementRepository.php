@@ -2,11 +2,24 @@
 
 namespace ExtensionMesh\Shopware\Infrastructure\Persistence;
 
-use Doctrine\DBAL\ArrayParameterType;
-use Doctrine\DBAL\Connection;
-use Doctrine\DBAL\ParameterType;
-use ExtensionMesh\Shopware\Exception\ExtensionMeshException;
+use ExtensionMesh\Shopware\Core\Content\Entitlement\EntitlementEntity;
+use ExtensionMesh\Shopware\Core\Content\Entitlement\EntitlementCollection;
+use ExtensionMesh\Shopware\Core\Content\ExtensionMeshProduct\ExtensionMeshProductCollection;
+use ExtensionMesh\Shopware\Core\Content\ExtensionMeshProduct\ExtensionMeshProductEntity;
+use ExtensionMesh\Shopware\Core\Content\RepositoryConnection\RepositoryConnectionCollection;
+use ExtensionMesh\Shopware\Core\Content\RepositoryConnection\RepositoryConnectionEntity;
+use Shopware\Core\Checkout\Order\OrderCollection;
+use Shopware\Core\Checkout\Order\OrderEntity;
+use Shopware\Core\Content\Product\ProductCollection;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsAnyFilter;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\MultiFilter;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\NotFilter;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\RangeFilter;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 
@@ -16,422 +29,135 @@ final class EntitlementRepository
         'ExtensionMesh.config.orderEntitlementValidityDays';
 
     public function __construct(
-        private readonly Connection $connection,
+        /** @var EntityRepository<EntitlementCollection> */
+        private readonly EntityRepository $repository,
+        /** @var EntityRepository<OrderCollection> */
+        private readonly EntityRepository $orders,
+        /** @var EntityRepository<ProductCollection> */
+        private readonly EntityRepository $products,
+        /** @var EntityRepository<ExtensionMeshProductCollection> */
+        private readonly EntityRepository $integratedProducts,
+        /** @var EntityRepository<RepositoryConnectionCollection> */
+        private readonly EntityRepository $connections,
         private readonly SystemConfigService $systemConfig
     ) {
     }
 
-    /**
-     * @return list<string>
-     */
-    public function entitledProductIds(string $customerId, ?string $salesChannelId = null): array
+    /** @return list<string> */
+    public function entitledProductIds(string $customerId, ?string $salesChannelId, Context $context): array
     {
-        if (!Uuid::isValid($customerId)) {
+        $criteria = $this->activeCriteria($customerId, $salesChannelId);
+        if ($criteria === null) {
             return [];
         }
 
-        $parameters = ['customerId' => Uuid::fromHexToBytes($customerId)];
-        $salesChannelClause = '';
-        if ($salesChannelId !== null) {
-            if (!Uuid::isValid($salesChannelId)) {
-                return [];
-            }
-
-            $parameters['salesChannelId'] = Uuid::fromHexToBytes($salesChannelId);
-            $salesChannelClause = ' AND sales_channel_id = :salesChannelId';
+        $productIds = [];
+        $entitlements = $this->repository->search($criteria, $context);
+        foreach ($entitlements as $entity) {
+            $productIds[$entity->getProductId()] = true;
         }
 
-        return \array_map(
-            static fn (mixed $id): string => Uuid::fromBytesToHex((string) $id),
-            $this->connection->fetchFirstColumn(
-                'SELECT DISTINCT product_id
-                   FROM extension_mesh_entitlement
-                  WHERE customer_id = :customerId
-                    AND enabled = 1
-                    AND (
-                        valid_until IS NULL
-                        OR valid_until > UTC_TIMESTAMP(3)
-                    )' . $salesChannelClause,
-                $parameters
-            )
-        );
+        return \array_keys($productIds);
     }
 
-    public function isEntitled(string $customerId, string $productId, ?string $salesChannelId = null): bool
+    public function isEntitled(string $customerId, string $productId, ?string $salesChannelId, Context $context): bool
     {
-        if (!Uuid::isValid($customerId) || !Uuid::isValid($productId)) {
+        if (!Uuid::isValid($productId)) {
             return false;
         }
-        if ($salesChannelId !== null && !Uuid::isValid($salesChannelId)) {
+        $criteria = $this->activeCriteria($customerId, $salesChannelId);
+        if ($criteria === null) {
             return false;
         }
+        $criteria->addFilter(new EqualsFilter('productId', $productId))->setLimit(1);
 
-        $parameters = [
-            'customerId' => Uuid::fromHexToBytes($customerId),
-            'productId' => Uuid::fromHexToBytes($productId),
-        ];
-        $salesChannelClause = '';
-        if ($salesChannelId !== null) {
-            $parameters['salesChannelId'] = Uuid::fromHexToBytes($salesChannelId);
-            $salesChannelClause = ' AND sales_channel_id = :salesChannelId';
-        }
-
-        return (bool) $this->connection->fetchOne(
-            'SELECT 1
-               FROM extension_mesh_entitlement
-              WHERE customer_id = :customerId
-                AND product_id = :productId
-                AND enabled = 1
-                AND (
-                    valid_until IS NULL
-                    OR valid_until > UTC_TIMESTAMP(3)
-                )' . $salesChannelClause . '
-              LIMIT 1',
-            $parameters
-        );
+        return $this->repository->searchIds($criteria, $context)->getTotal() > 0;
     }
 
-    /**
-     * @param array{
-     *     search?: string,
-     *     customerId?: list<string>,
-     *     productId?: list<string>,
-     *     salesChannelId?: list<string>,
-     *     status?: list<'enabled'|'disabled'|'expired'>,
-     *     orderLink?: list<'linked'|'standalone'>
-     * } $filters
-     *
-     * @return array{
-     *     items: list<array<string, mixed>>,
-     *     total: int,
-     *     page: int,
-     *     limit: int
-     * }
-     */
-    public function paginate(int $page, int $limit, array $filters = []): array
-    {
-        $from = ' FROM extension_mesh_entitlement entitlement
-                   INNER JOIN customer
-                     ON customer.id = entitlement.customer_id
-                   INNER JOIN product
-                     ON product.id = entitlement.product_id
-                    AND product.version_id = entitlement.product_version_id
-                   INNER JOIN sales_channel
-                     ON sales_channel.id = entitlement.sales_channel_id
-                   LEFT JOIN sales_channel_translation
-                     ON sales_channel_translation.sales_channel_id = sales_channel.id
-                    AND sales_channel_translation.language_id = :systemLanguageId
-                   LEFT JOIN `order` linked_order
-                     ON linked_order.id = entitlement.order_id
-                    AND linked_order.version_id = entitlement.order_version_id';
-        $where = [];
-        $parameters = [
-            'systemLanguageId' => Uuid::fromHexToBytes(Defaults::LANGUAGE_SYSTEM),
-        ];
-        $types = [];
-
-        $search = \trim($filters['search'] ?? '');
-        if ($search !== '') {
-            $where[] = '(customer.customer_number LIKE :search
-                OR customer.first_name LIKE :search
-                OR customer.last_name LIKE :search
-                OR customer.email LIKE :search
-                OR product.product_number LIKE :search
-                OR sales_channel_translation.name LIKE :search
-                OR linked_order.order_number LIKE :search)';
-            $parameters['search'] = '%' . $search . '%';
-        }
-
-        foreach ([
-            'customerId' => 'entitlement.customer_id',
-            'productId' => 'entitlement.product_id',
-            'salesChannelId' => 'entitlement.sales_channel_id',
-        ] as $filter => $column) {
-            $values = $filters[$filter] ?? null;
-            if (!\is_array($values) || $values === []) {
-                continue;
-            }
-
-            $invalidValues = \array_filter(
-                $values,
-                static fn (string $value): bool => !Uuid::isValid($value)
-            );
-            if ($invalidValues !== []) {
-                $where[] = '1 = 0';
-                continue;
-            }
-
-            $where[] = $column . ' IN (:' . $filter . ')';
-            $parameters[$filter] = \array_map(Uuid::fromHexToBytes(...), $values);
-            $types[$filter] = ArrayParameterType::BINARY;
-        }
-
-        $statusClauses = [];
-        foreach ($filters['status'] ?? [] as $status) {
-            match ($status) {
-                'enabled' => $statusClauses[] = '(entitlement.enabled = 1
-                AND (
-                    entitlement.valid_until IS NULL
-                    OR entitlement.valid_until > UTC_TIMESTAMP(3)
-                ))',
-                'disabled' => $statusClauses[] = 'entitlement.enabled = 0',
-                'expired' => $statusClauses[] = '(entitlement.enabled = 1
-                    AND entitlement.valid_until <= UTC_TIMESTAMP(3))',
-            };
-        }
-        if ($statusClauses !== [] && \count($statusClauses) < 3) {
-            $where[] = '(' . \implode(' OR ', $statusClauses) . ')';
-        }
-
-        $orderLinks = $filters['orderLink'] ?? [];
-        if (\count($orderLinks) === 1) {
-            $where[] = $orderLinks[0] === 'linked'
-                ? 'entitlement.order_id IS NOT NULL'
-                : 'entitlement.order_id IS NULL';
-        }
-
-        $whereSql = $where === [] ? '' : ' WHERE ' . \implode(' AND ', $where);
-        $total = (int) $this->connection->fetchOne(
-            'SELECT COUNT(*)' . $from . $whereSql,
-            $parameters,
-            $types
-        );
-        $page = \min($page, \max(1, (int) \ceil($total / $limit)));
-        $rows = $this->connection->fetchAllAssociative(
-            'SELECT entitlement.*,
-                    customer.customer_number,
-                    customer.first_name,
-                    customer.last_name,
-                    customer.email,
-                    product.product_number,
-                    sales_channel_translation.name AS sales_channel_name,
-                    linked_order.order_number
-               ' . $from . $whereSql . '
-               ORDER BY entitlement.created_at DESC, entitlement.id
-               LIMIT :limit OFFSET :offset',
-            \array_merge($parameters, [
-                'limit' => $limit,
-                'offset' => ($page - 1) * $limit,
-            ]),
-            [
-                ...$types,
-                'limit' => ParameterType::INTEGER,
-                'offset' => ParameterType::INTEGER,
-            ]
-        );
-
-        return [
-            'items' => \array_map($this->hydrate(...), $rows),
-            'total' => $total,
-            'page' => $page,
-            'limit' => $limit,
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public function create(
-        string $customerId,
-        string $productId,
-        string $salesChannelId,
-        ?string $orderId,
-        bool $enabled,
-        ?\DateTimeImmutable $validUntil
-    ): array {
-        $this->assertReferences($customerId, $productId, $salesChannelId, $orderId);
-
-        $id = Uuid::randomHex();
-        $now = (new \DateTimeImmutable())->format('Y-m-d H:i:s.v');
-        $this->connection->insert('extension_mesh_entitlement', [
-            'id' => Uuid::fromHexToBytes($id),
-            'customer_id' => Uuid::fromHexToBytes($customerId),
-            'product_id' => Uuid::fromHexToBytes($productId),
-            'product_version_id' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
-            'sales_channel_id' => Uuid::fromHexToBytes($salesChannelId),
-            'order_id' => $orderId === null ? null : Uuid::fromHexToBytes($orderId),
-            'order_version_id' => $orderId === null
-                ? null
-                : Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
-            'enabled' => $enabled ? 1 : 0,
-            'valid_until' => $validUntil === null
-                ? null
-                : $this->databaseDate($validUntil),
-            'created_at' => $now,
-        ]);
-
-        return $this->get($id);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public function update(
-        string $id,
-        string $customerId,
-        string $productId,
-        string $salesChannelId,
-        ?string $orderId,
-        bool $enabled,
-        ?\DateTimeImmutable $validUntil
-    ): array {
-        if (!Uuid::isValid($id)) {
-            throw ExtensionMeshException::entitlementNotFound($id);
-        }
-        $this->assertReferences($customerId, $productId, $salesChannelId, $orderId);
-
-        $affected = $this->connection->update('extension_mesh_entitlement', [
-            'customer_id' => Uuid::fromHexToBytes($customerId),
-            'product_id' => Uuid::fromHexToBytes($productId),
-            'product_version_id' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
-            'sales_channel_id' => Uuid::fromHexToBytes($salesChannelId),
-            'order_id' => $orderId === null ? null : Uuid::fromHexToBytes($orderId),
-            'order_version_id' => $orderId === null
-                ? null
-                : Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
-            'enabled' => $enabled ? 1 : 0,
-            'valid_until' => $validUntil === null
-                ? null
-                : $this->databaseDate($validUntil),
-            'updated_at' => (new \DateTimeImmutable())->format('Y-m-d H:i:s.v'),
-        ], [
-            'id' => Uuid::fromHexToBytes($id),
-        ]);
-
-        if ($affected === 0 && !$this->exists($id)) {
-            throw ExtensionMeshException::entitlementNotFound($id);
-        }
-
-        return $this->get($id);
-    }
-
-    public function delete(string $id): void
-    {
-        if (!Uuid::isValid($id)) {
-            throw ExtensionMeshException::entitlementNotFound($id);
-        }
-
-        $affected = $this->connection->delete(
-            'extension_mesh_entitlement',
-            ['id' => Uuid::fromHexToBytes($id)]
-        );
-        if ($affected === 0) {
-            throw ExtensionMeshException::entitlementNotFound($id);
-        }
-    }
-
-    public function issueForOrder(string $orderId): int
+    public function issueForOrder(string $orderId, Context $context): int
     {
         if (!Uuid::isValid($orderId)) {
             return 0;
         }
 
-        $liveVersion = Uuid::fromHexToBytes(Defaults::LIVE_VERSION);
-        $orderIdBytes = Uuid::fromHexToBytes($orderId);
-        $rows = $this->connection->fetchAllAssociative(
-            'SELECT linked_order.sales_channel_id,
-                    order_customer.customer_id,
-                    order_line_item.product_id,
-                    SUM(order_line_item.quantity) AS quantity
-               FROM `order` linked_order
-               INNER JOIN order_customer
-                 ON order_customer.order_id = linked_order.id
-                AND order_customer.order_version_id = linked_order.version_id
-               INNER JOIN order_line_item
-                 ON order_line_item.order_id = linked_order.id
-                AND order_line_item.order_version_id = linked_order.version_id
-              WHERE linked_order.id = :orderId
-                AND linked_order.version_id = :liveVersion
-                AND order_line_item.product_id IS NOT NULL
-                AND (
-                    EXISTS (
-                        SELECT 1
-                          FROM extension_mesh_repository_connection connection
-                         WHERE connection.product_id = order_line_item.product_id
-                           AND connection.enabled = 1
-                    )
-                    OR EXISTS (
-                        SELECT 1
-                          FROM extension_mesh_product integrated
-                         WHERE integrated.product_id = order_line_item.product_id
-                           AND integrated.enabled = 1
-                    )
-                )
-              GROUP BY linked_order.sales_channel_id,
-                       order_customer.customer_id,
-                       order_line_item.product_id',
-            [
-                'orderId' => $orderIdBytes,
-                'liveVersion' => $liveVersion,
-            ]
-        );
-        if ($rows === []) {
+        $criteria = (new Criteria([$orderId]))
+            ->addAssociation('orderCustomer')
+            ->addAssociation('lineItems');
+        $order = $this->orders->search($criteria, $context)->first();
+        if (!$order instanceof OrderEntity || $order->getOrderCustomer()?->getCustomerId() === null) {
             return 0;
         }
 
-        $existingRows = $this->connection->fetchAllAssociative(
-            'SELECT product_id, COUNT(*) AS quantity
-               FROM extension_mesh_entitlement
-              WHERE order_id = :orderId
-                AND order_version_id = :liveVersion
-              GROUP BY product_id',
-            [
-                'orderId' => $orderIdBytes,
-                'liveVersion' => $liveVersion,
-            ]
-        );
-        $existingByProduct = [];
-        foreach ($existingRows as $existingRow) {
-            $existingByProduct[Uuid::fromBytesToHex((string) $existingRow['product_id'])]
-                = (int) $existingRow['quantity'];
-        }
-
-        $created = 0;
-        $nowDate = new \DateTimeImmutable();
-        $now = $this->databaseDate($nowDate);
-        foreach ($rows as $row) {
-            $productId = Uuid::fromBytesToHex((string) $row['product_id']);
-            $salesChannelId = Uuid::fromBytesToHex((string) $row['sales_channel_id']);
-            $validityDays = $this->orderValidityDays($salesChannelId);
-            $validUntil = $validityDays === null
-                ? null
-                : $this->databaseDate(
-                    $nowDate->modify(\sprintf('+%d days', $validityDays))
-                );
-            $missing = \max(0, (int) $row['quantity'] - ($existingByProduct[$productId] ?? 0));
-            for ($index = 0; $index < $missing; ++$index) {
-                $this->connection->insert('extension_mesh_entitlement', [
-                    'id' => Uuid::fromHexToBytes(Uuid::randomHex()),
-                    'customer_id' => $row['customer_id'],
-                    'product_id' => $row['product_id'],
-                    'product_version_id' => $liveVersion,
-                    'sales_channel_id' => $row['sales_channel_id'],
-                    'order_id' => $orderIdBytes,
-                    'order_version_id' => $liveVersion,
-                    'enabled' => 1,
-                    'valid_until' => $validUntil,
-                    'created_at' => $now,
-                ]);
-                ++$created;
+        $quantities = [];
+        foreach ($order->getLineItems() ?? [] as $lineItem) {
+            $productId = $lineItem->getProductId();
+            if ($productId !== null) {
+                $quantities[$productId] = ($quantities[$productId] ?? 0) + $lineItem->getQuantity();
             }
         }
+        $eligible = \array_flip($this->eligibleProductIds($context));
+        $quantities = \array_filter(
+            $quantities,
+            static fn (string $productId): bool => isset($eligible[$productId]),
+            \ARRAY_FILTER_USE_KEY
+        );
+        if ($quantities === []) {
+            return 0;
+        }
 
-        return $created;
+        $existingCriteria = (new Criteria())
+            ->addFilter(new EqualsFilter('orderId', $orderId))
+            ->addFilter(new EqualsFilter('orderVersionId', Defaults::LIVE_VERSION));
+        $existing = [];
+        $existingEntitlements = $this->repository->search($existingCriteria, $context);
+        foreach ($existingEntitlements as $entity) {
+            $productId = $entity->getProductId();
+            $existing[$productId] = ($existing[$productId] ?? 0) + 1;
+        }
+
+        $now = new \DateTimeImmutable();
+        $validityDays = $this->orderValidityDays($order->getSalesChannelId());
+        $validUntil = $validityDays === null ? null : $now->modify(\sprintf('+%d days', $validityDays));
+        $writes = [];
+        foreach ($quantities as $productId => $quantity) {
+            $missing = \max(0, $quantity - ($existing[$productId] ?? 0));
+            for ($index = 0; $index < $missing; ++$index) {
+                $writes[] = [
+                    'id' => Uuid::randomHex(),
+                    'customerId' => $order->getOrderCustomer()->getCustomerId(),
+                    'productId' => $productId,
+                    'productVersionId' => Defaults::LIVE_VERSION,
+                    'salesChannelId' => $order->getSalesChannelId(),
+                    'orderId' => $orderId,
+                    'orderVersionId' => Defaults::LIVE_VERSION,
+                    'enabled' => true,
+                    'validUntil' => $validUntil,
+                ];
+            }
+        }
+        if ($writes !== []) {
+            $this->repository->create($writes, $context);
+        }
+
+        return \count($writes);
     }
 
-    public function disableForOrder(string $orderId): void
+    public function disableForOrder(string $orderId, Context $context): void
     {
         if (!Uuid::isValid($orderId)) {
             return;
         }
-
-        $this->connection->update('extension_mesh_entitlement', [
-            'enabled' => 0,
-            'updated_at' => (new \DateTimeImmutable())->format('Y-m-d H:i:s.v'),
-        ], [
-            'order_id' => Uuid::fromHexToBytes($orderId),
-            'order_version_id' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
-        ]);
+        $criteria = (new Criteria())
+            ->addFilter(new EqualsFilter('orderId', $orderId))
+            ->addFilter(new EqualsFilter('orderVersionId', Defaults::LIVE_VERSION));
+        $ids = $this->repository->searchIds($criteria, $context)->getIds();
+        if ($ids === []) {
+            return;
+        }
+        $this->repository->update(\array_map(
+            static fn (string $id): array => ['id' => $id, 'enabled' => false],
+            $ids
+        ), $context);
     }
 
     /**
@@ -439,248 +165,62 @@ final class EntitlementRepository
      *
      * @return list<string>
      */
-    public function existingProductIds(array $productIds): array
+    public function existingProductIds(array $productIds, Context $context): array
     {
-        $binaryIds = [];
-        foreach ($productIds as $productId) {
-            if (Uuid::isValid($productId)) {
-                $binaryIds[] = Uuid::fromHexToBytes($productId);
-            }
-        }
-        if ($binaryIds === []) {
+        $validIds = \array_values(\array_filter($productIds, Uuid::isValid(...)));
+        if ($validIds === []) {
             return [];
         }
+        $criteria = (new Criteria($validIds))
+            ->addFilter(new EqualsFilter('versionId', Defaults::LIVE_VERSION));
 
-        return \array_map(
-            static fn (mixed $id): string => Uuid::fromBytesToHex((string) $id),
-            $this->connection->fetchFirstColumn(
-                'SELECT id FROM product WHERE id IN (:ids) AND version_id = :liveVersion',
-                [
-                    'ids' => $binaryIds,
-                    'liveVersion' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
-                ],
-                ['ids' => ArrayParameterType::BINARY]
-            )
-        );
+        return $this->products->searchIds($criteria, $context)->getIds();
     }
 
-    /**
-     * @return list<string>
-     */
-    public function eligibleProductIds(): array
+    /** @return list<string> */
+    public function eligibleProductIds(Context $context): array
     {
-        return \array_map(
-            static fn (mixed $id): string => Uuid::fromBytesToHex((string) $id),
-            $this->connection->fetchFirstColumn(
-                'SELECT product_id
-                   FROM extension_mesh_product
-                  WHERE enabled = 1
-                  UNION
-                 SELECT product_id
-                   FROM extension_mesh_repository_connection
-                  WHERE enabled = 1
-                    AND product_id IS NOT NULL'
-            )
-        );
-    }
+        $integratedCriteria = (new Criteria())->addFilter(new EqualsFilter('enabled', true));
+        $connectionCriteria = (new Criteria())
+            ->addFilter(new EqualsFilter('enabled', true))
+            ->addFilter(new NotFilter(NotFilter::CONNECTION_AND, [
+                new EqualsFilter('productId', null),
+            ]));
 
-    /**
-     * @return array<string, mixed>
-     */
-    public function get(string $id): array
-    {
-        if (!Uuid::isValid($id)) {
-            throw ExtensionMeshException::entitlementNotFound($id);
+        $ids = [];
+        $integratedProducts = $this->integratedProducts->search($integratedCriteria, $context);
+        foreach ($integratedProducts as $entity) {
+            $ids[$entity->getProductId()] = true;
         }
-
-        $row = $this->connection->fetchAssociative(
-            'SELECT entitlement.*,
-                    customer.customer_number,
-                    customer.first_name,
-                    customer.last_name,
-                    customer.email,
-                    product.product_number,
-                    sales_channel_translation.name AS sales_channel_name,
-                    linked_order.order_number
-               FROM extension_mesh_entitlement entitlement
-               INNER JOIN customer
-                 ON customer.id = entitlement.customer_id
-               INNER JOIN product
-                 ON product.id = entitlement.product_id
-                AND product.version_id = entitlement.product_version_id
-               INNER JOIN sales_channel
-                 ON sales_channel.id = entitlement.sales_channel_id
-               LEFT JOIN sales_channel_translation
-                 ON sales_channel_translation.sales_channel_id = sales_channel.id
-                AND sales_channel_translation.language_id = :systemLanguageId
-               LEFT JOIN `order` linked_order
-                 ON linked_order.id = entitlement.order_id
-                AND linked_order.version_id = entitlement.order_version_id
-              WHERE entitlement.id = :id',
-            [
-                'id' => Uuid::fromHexToBytes($id),
-                'systemLanguageId' => Uuid::fromHexToBytes(Defaults::LANGUAGE_SYSTEM),
-            ]
-        );
-        if ($row === false) {
-            throw ExtensionMeshException::entitlementNotFound($id);
-        }
-
-        return $this->hydrate($row);
-    }
-
-    private function exists(string $id): bool
-    {
-        return (bool) $this->connection->fetchOne(
-            'SELECT 1 FROM extension_mesh_entitlement WHERE id = :id',
-            ['id' => Uuid::fromHexToBytes($id)]
-        );
-    }
-
-    private function assertReferences(
-        string $customerId,
-        string $productId,
-        string $salesChannelId,
-        ?string $orderId
-    ): void {
-        foreach ([
-            'customer' => $customerId,
-            'product' => $productId,
-            'sales channel' => $salesChannelId,
-        ] as $label => $id) {
-            if (!Uuid::isValid($id)) {
-                throw ExtensionMeshException::invalidEntitlement($label . ' ID is invalid.');
+        $connections = $this->connections->search($connectionCriteria, $context);
+        foreach ($connections as $entity) {
+            if ($entity->getProductId() !== null) {
+                $ids[$entity->getProductId()] = true;
             }
         }
-        if ($orderId !== null && !Uuid::isValid($orderId)) {
-            throw ExtensionMeshException::invalidEntitlement('order ID is invalid.');
-        }
 
-        if (!$this->entityExists('customer', $customerId)) {
-            throw ExtensionMeshException::invalidEntitlement('customer does not exist.');
-        }
-        if (!$this->entityExists('sales_channel', $salesChannelId)) {
-            throw ExtensionMeshException::invalidEntitlement('sales channel does not exist.');
-        }
-        if (!(bool) $this->connection->fetchOne(
-            'SELECT 1
-               FROM product
-              WHERE id = :id
-                AND version_id = :liveVersion
-                AND (
-                    EXISTS (
-                        SELECT 1
-                          FROM extension_mesh_product integrated
-                         WHERE integrated.product_id = product.id
-                           AND integrated.enabled = 1
-                    )
-                    OR EXISTS (
-                        SELECT 1
-                          FROM extension_mesh_repository_connection connection
-                         WHERE connection.product_id = product.id
-                           AND connection.enabled = 1
-                    )
-                )',
-            [
-                'id' => Uuid::fromHexToBytes($productId),
-                'liveVersion' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
-            ]
-        )) {
-            throw ExtensionMeshException::invalidEntitlement(
-                'product is not connected to Extension Mesh.'
-            );
-        }
-
-        if ($orderId === null) {
-            return;
-        }
-
-        $order = $this->connection->fetchAssociative(
-            'SELECT linked_order.sales_channel_id, order_customer.customer_id
-               FROM `order` linked_order
-               INNER JOIN order_customer
-                 ON order_customer.order_id = linked_order.id
-                AND order_customer.order_version_id = linked_order.version_id
-              WHERE linked_order.id = :id
-                AND linked_order.version_id = :liveVersion',
-            [
-                'id' => Uuid::fromHexToBytes($orderId),
-                'liveVersion' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
-            ]
-        );
-        if ($order === false) {
-            throw ExtensionMeshException::invalidEntitlement('order does not exist.');
-        }
-        if (
-            !\hash_equals(
-                Uuid::fromHexToBytes($customerId),
-                (string) $order['customer_id']
-            )
-        ) {
-            throw ExtensionMeshException::invalidEntitlement(
-                'the linked order belongs to another customer.'
-            );
-        }
-        if (
-            !\hash_equals(
-                Uuid::fromHexToBytes($salesChannelId),
-                (string) $order['sales_channel_id']
-            )
-        ) {
-            throw ExtensionMeshException::invalidEntitlement(
-                'the linked order belongs to another sales channel.'
-            );
-        }
+        return \array_keys($ids);
     }
 
-    private function entityExists(string $table, string $id): bool
+    private function activeCriteria(string $customerId, ?string $salesChannelId): ?Criteria
     {
-        return (bool) $this->connection->fetchOne(
-            \sprintf('SELECT 1 FROM `%s` WHERE id = :id', $table),
-            ['id' => Uuid::fromHexToBytes($id)]
-        );
-    }
+        if (!Uuid::isValid($customerId) || ($salesChannelId !== null && !Uuid::isValid($salesChannelId))) {
+            return null;
+        }
+        $criteria = (new Criteria())
+            ->addFilter(new EqualsFilter('customerId', $customerId))
+            ->addFilter(new EqualsFilter('enabled', true))
+            ->addFilter(new MultiFilter(MultiFilter::CONNECTION_OR, [
+                new EqualsFilter('validUntil', null),
+                new RangeFilter('validUntil', [
+                    RangeFilter::GT => (new \DateTimeImmutable())->format(Defaults::STORAGE_DATE_TIME_FORMAT),
+                ]),
+            ]));
+        if ($salesChannelId !== null) {
+            $criteria->addFilter(new EqualsFilter('salesChannelId', $salesChannelId));
+        }
 
-    /**
-     * @param array<string, mixed> $row
-     *
-     * @return array<string, mixed>
-     */
-    private function hydrate(array $row): array
-    {
-        $orderId = \is_string($row['order_id'] ?? null)
-            ? Uuid::fromBytesToHex($row['order_id'])
-            : null;
-        $customerName = \trim(
-            (string) ($row['first_name'] ?? '') . ' ' . (string) ($row['last_name'] ?? '')
-        );
-
-        return [
-            'id' => Uuid::fromBytesToHex((string) $row['id']),
-            'customerId' => Uuid::fromBytesToHex((string) $row['customer_id']),
-            'customerNumber' => (string) ($row['customer_number'] ?? ''),
-            'customerFirstName' => (string) ($row['first_name'] ?? ''),
-            'customerLastName' => (string) ($row['last_name'] ?? ''),
-            'customerName' => $customerName,
-            'customerEmail' => (string) ($row['email'] ?? ''),
-            'productId' => Uuid::fromBytesToHex((string) $row['product_id']),
-            'productNumber' => (string) ($row['product_number'] ?? ''),
-            'salesChannelId' => Uuid::fromBytesToHex((string) $row['sales_channel_id']),
-            'salesChannelName' => (string) ($row['sales_channel_name'] ?? ''),
-            'orderId' => $orderId,
-            'orderNumber' => \is_string($row['order_number'] ?? null) ? $row['order_number'] : null,
-            'enabled' => (bool) $row['enabled'],
-            'validUntil' => \is_string($row['valid_until'] ?? null)
-                ? $this->apiDate($row['valid_until'])
-                : null,
-            'expired' => \is_string($row['valid_until'] ?? null)
-                && new \DateTimeImmutable(
-                    $row['valid_until'],
-                    new \DateTimeZone('UTC')
-                ) <= new \DateTimeImmutable('now', new \DateTimeZone('UTC')),
-            'createdAt' => (string) $row['created_at'],
-            'updatedAt' => \is_string($row['updated_at'] ?? null) ? $row['updated_at'] : null,
-        ];
+        return $criteria;
     }
 
     private function orderValidityDays(string $salesChannelId): ?int
@@ -693,16 +233,4 @@ final class EntitlementRepository
         return $configured > 0 ? $configured : null;
     }
 
-    private function databaseDate(\DateTimeImmutable $date): string
-    {
-        return $date
-            ->setTimezone(new \DateTimeZone('UTC'))
-            ->format('Y-m-d H:i:s.v');
-    }
-
-    private function apiDate(string $date): string
-    {
-        return (new \DateTimeImmutable($date, new \DateTimeZone('UTC')))
-            ->format(\DATE_ATOM);
-    }
 }

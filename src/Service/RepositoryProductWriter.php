@@ -2,7 +2,6 @@
 
 namespace ExtensionMesh\Shopware\Service;
 
-use Doctrine\DBAL\Connection;
 use ExtensionMesh\Shopware\Exception\ExtensionMeshException;
 use Shopware\Core\Content\Media\MediaCollection;
 use Shopware\Core\Content\Media\MediaService;
@@ -11,37 +10,49 @@ use Shopware\Core\Content\Product\ProductDefinition;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Sorting\FieldSorting;
 use Shopware\Core\Framework\Uuid\Uuid;
+use Shopware\Core\System\Language\LanguageCollection;
+use Shopware\Core\System\Language\LanguageEntity;
+use Shopware\Core\System\Tax\TaxCollection;
+use Shopware\Core\System\Tax\TaxEntity;
 
 final class RepositoryProductWriter
 {
     public function __construct(
-        private readonly Connection $connection,
         /** @var EntityRepository<ProductCollection> */
         private readonly EntityRepository $productRepository,
         private readonly MediaService $mediaService,
         /** @var EntityRepository<MediaCollection> */
-        private readonly EntityRepository $mediaRepository
+        private readonly EntityRepository $mediaRepository,
+        /** @var EntityRepository<TaxCollection> */
+        private readonly EntityRepository $taxRepository,
+        /** @var EntityRepository<LanguageCollection> */
+        private readonly EntityRepository $languageRepository
     ) {
     }
 
-    public function assertProductExists(string $productId): void
+    public function assertProductExists(string $productId, Context $context): void
     {
-        if (!$this->productExists($productId)) {
+        if (!$this->productExists($productId, $context)) {
             throw ExtensionMeshException::invalidRepository('the linked Shopware product does not exist.');
         }
     }
 
-    public function productExists(string $productId): bool
+    public function productExists(string $productId, Context $context): bool
     {
-        return Uuid::isValid($productId)
-            && (bool) $this->connection->fetchOne(
-                'SELECT 1 FROM product WHERE id = :id AND version_id = :version',
-                [
-                    'id' => Uuid::fromHexToBytes($productId),
-                    'version' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
-                ]
-            );
+        if (!Uuid::isValid($productId)) {
+            return false;
+        }
+        $criteria = (new Criteria([$productId]))
+            ->addFilter(new EqualsFilter('versionId', Defaults::LIVE_VERSION));
+
+        return $this->productRepository->searchIds(
+            $criteria,
+            $context
+        )->getTotal() > 0;
     }
 
     /**
@@ -63,9 +74,15 @@ final class RepositoryProductWriter
             throw ExtensionMeshException::invalidRepository('the latest release has no valid technical name.');
         }
 
-        $translations = $this->translations($archive, $metadata, $technicalName);
-        $taxId = $this->connection->fetchOne('SELECT id FROM tax ORDER BY tax_rate DESC, created_at LIMIT 1');
-        if (!\is_string($taxId)) {
+        $translations = $this->translations($archive, $metadata, $technicalName, $context);
+        $tax = $this->taxRepository->search(
+            (new Criteria())
+                ->addSorting(new FieldSorting('taxRate', FieldSorting::DESCENDING))
+                ->addSorting(new FieldSorting('createdAt'))
+                ->setLimit(1),
+            $context
+        )->first();
+        if (!$tax instanceof TaxEntity) {
             throw ExtensionMeshException::invalidRepository('Shopware has no tax rate for the imported product.');
         }
 
@@ -82,7 +99,7 @@ final class RepositoryProductWriter
             ) . '-' . \substr(\hash('sha256', $productId), 0, 8),
             'stock' => 999999,
             'active' => false,
-            'taxId' => Uuid::fromBytesToHex($taxId),
+            'taxId' => $tax->getId(),
             'type' => ProductDefinition::TYPE_DIGITAL,
             'shippingFree' => true,
             'maxPurchase' => 1,
@@ -193,7 +210,7 @@ final class RepositoryProductWriter
      *
      * @return array<string, array<string, string>>
      */
-    private function translations(array $archive, array $metadata, string $fallback): array
+    private function translations(array $archive, array $metadata, string $fallback, Context $context): array
     {
         $archiveLabels = $this->localized($archive['label'] ?? null);
         $metadataLabels = $this->localized($metadata['labels'] ?? null);
@@ -203,7 +220,7 @@ final class RepositoryProductWriter
         $metaDescriptions = $this->localized($metadata['metaDescriptions'] ?? null);
         $keywords = $this->localized($metadata['keywords'] ?? null);
 
-        $languageLocales = $this->languageLocales();
+        $languageLocales = $this->languageLocales($context);
         $translations = [];
         foreach ($languageLocales as $languageId => $locale) {
             $name = $this->forLocale($metadataLabels, $locale)
@@ -248,15 +265,16 @@ final class RepositoryProductWriter
     /**
      * @return array<string, string>
      */
-    private function languageLocales(): array
+    private function languageLocales(Context $context): array
     {
         $locales = [];
-        foreach ($this->connection->fetchAllAssociative(
-            'SELECT language.id, locale.code
-               FROM language
-               INNER JOIN locale ON locale.id = language.locale_id'
-        ) as $row) {
-            $locales[Uuid::fromBytesToHex((string) $row['id'])] = \str_replace('_', '-', (string) $row['code']);
+        $criteria = (new Criteria())->addAssociation('locale');
+        $languages = $this->languageRepository->search($criteria, $context);
+        foreach ($languages as $language) {
+            if ($language->getLocale() === null) {
+                continue;
+            }
+            $locales[$language->getId()] = \str_replace('_', '-', $language->getLocale()->getCode());
         }
 
         return $locales;

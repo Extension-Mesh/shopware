@@ -37,7 +37,11 @@ final class AccountAccessController extends StorefrontController
         CustomerEntity $customer
     ): Response {
         $page = $this->pageLoader->load($request, $context);
-        $token = $this->tokens->getOrCreate($customer->getId(), $context->getSalesChannelId());
+        $token = $this->tokens->getOrCreate(
+            $customer->getId(),
+            $context->getSalesChannelId(),
+            $context->getContext()
+        );
         $response = $this->renderStorefront(
             '@ExtensionMesh/storefront/page/account/extension-mesh.html.twig',
             [
@@ -63,7 +67,11 @@ final class AccountAccessController extends StorefrontController
     )]
     public function rotate(SalesChannelContext $context, CustomerEntity $customer): Response
     {
-        $this->tokens->rotate($customer->getId(), $context->getSalesChannelId());
+        $this->tokens->rotate(
+            $customer->getId(),
+            $context->getSalesChannelId(),
+            $context->getContext()
+        );
 
         return $this->redirectToRoute('frontend.extension_mesh.account');
     }

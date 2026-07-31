@@ -2,11 +2,12 @@ import template from './extension-mesh-repositories.html.twig';
 import './extension-mesh-repositories.scss';
 
 const { Component } = Shopware;
+const { Criteria } = Shopware.Data;
 
 Component.register('extension-mesh-repositories', {
     template,
 
-    inject: ['extensionMeshApiService'],
+    inject: ['extensionMeshApiService', 'repositoryFactory'],
 
     data() {
         return {
@@ -36,6 +37,14 @@ Component.register('extension-mesh-repositories', {
     },
 
     computed: {
+        repositoryRepository() {
+            return this.repositoryFactory.create('extension_mesh_repository_connection');
+        },
+
+        publicationRepository() {
+            return this.repositoryFactory.create('extension_mesh_published_release');
+        },
+
         modeOptions() {
             return [
                 {
@@ -138,22 +147,18 @@ Component.register('extension-mesh-repositories', {
             this.error = null;
 
             try {
-                const [repositories, publication] = await Promise.all([
-                    this.extensionMeshApiService.getSellerRepositories(
-                        this.repositoryPage,
-                        this.repositoryLimit,
-                    ),
-                    this.extensionMeshApiService.getPublicationStatus(
-                        this.publicationPage,
-                        this.publicationLimit,
-                    ),
+                await this.extensionMeshApiService.synchronizePublications();
+                const [repositories, publication, providers] = await Promise.all([
+                    this.fetchRepositoryPage(),
+                    this.fetchPublicationPage(),
+                    this.extensionMeshApiService.getRepositoryProviders(),
                 ]);
                 this.applyRepositoryPage(repositories);
-                this.providers = repositories.providers;
+                this.providers = providers;
                 this.applyPublicationPage(publication);
                 this.publicationPaths = {
-                    registry: publication.registryPath,
-                    account: publication.accountPath,
+                    registry: '/extension-mesh/v1/registry',
+                    account: '/account/extension-mesh',
                 };
                 if (!this.providers.some((provider) => provider.key === this.provider)) {
                     this.provider = this.providers[0]?.key || '';
@@ -170,28 +175,32 @@ Component.register('extension-mesh-repositories', {
 
         async loadRepositoryPage() {
             await this.withLoading(async () => {
-                const result = await this.extensionMeshApiService.getSellerRepositories(
-                    this.repositoryPage,
-                    this.repositoryLimit,
-                );
+                const result = await this.fetchRepositoryPage();
                 this.applyRepositoryPage(result);
-                this.providers = result.providers;
             });
         },
 
         async loadPublicationPage() {
             await this.withLoading(async () => {
-                const result = await this.extensionMeshApiService.getPublicationStatus(
-                    this.publicationPage,
-                    this.publicationLimit,
-                    false,
-                );
+                const result = await this.fetchPublicationPage();
                 this.applyPublicationPage(result);
-                this.publicationPaths = {
-                    registry: result.registryPath,
-                    account: result.accountPath,
-                };
             });
+        },
+
+        async fetchRepositoryPage() {
+            const criteria = new Criteria(this.repositoryPage, this.repositoryLimit);
+            criteria.addSorting(Criteria.sort('createdAt', 'ASC'));
+            criteria.setTotalCountMode(1);
+            const result = await this.repositoryRepository.search(criteria, Shopware.Context.api);
+            return { data: result, total: result.total, page: this.repositoryPage, limit: this.repositoryLimit };
+        },
+
+        async fetchPublicationPage() {
+            const criteria = new Criteria(this.publicationPage, this.publicationLimit);
+            criteria.addSorting(Criteria.sort('createdAt', 'ASC'));
+            criteria.setTotalCountMode(1);
+            const result = await this.publicationRepository.search(criteria, Shopware.Context.api);
+            return { data: result, total: result.total, page: this.publicationPage, limit: this.publicationLimit };
         },
 
         applyRepositoryPage(result) {
@@ -284,18 +293,10 @@ Component.register('extension-mesh-repositories', {
             this.repositoryPollTimer = null;
             try {
                 const [repositories, publication] = await Promise.all([
-                    this.extensionMeshApiService.getSellerRepositories(
-                        this.repositoryPage,
-                        this.repositoryLimit,
-                    ),
-                    this.extensionMeshApiService.getPublicationStatus(
-                        this.publicationPage,
-                        this.publicationLimit,
-                        false,
-                    ),
+                    this.fetchRepositoryPage(),
+                    this.fetchPublicationPage(),
                 ]);
                 this.applyRepositoryPage(repositories);
-                this.providers = repositories.providers;
                 this.applyPublicationPage(publication);
             } catch (error) {
                 this.error = this.errorMessage(error);
@@ -327,12 +328,8 @@ Component.register('extension-mesh-repositories', {
         async unlinkRepository(id) {
             await this.withLoading(async () => {
                 await this.extensionMeshApiService.unlinkSellerRepository(id);
-                const result = await this.extensionMeshApiService.getSellerRepositories(
-                    this.repositoryPage,
-                    this.repositoryLimit,
-                );
+                const result = await this.fetchRepositoryPage();
                 this.applyRepositoryPage(result);
-                this.providers = result.providers;
             });
         },
 

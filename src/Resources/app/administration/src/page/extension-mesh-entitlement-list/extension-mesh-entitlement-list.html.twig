@@ -21,6 +21,7 @@
 
     <template #smart-bar-actions>
         <mt-button
+            v-if="acl.can('extension_mesh.creator')"
             variant="primary"
             :disabled="isLoading"
             @click="$router.push({ name: 'extension.mesh.entitlement.create' })"
@@ -60,26 +61,26 @@
                     <router-link
                         :to="{ name: 'sw.customer.detail', params: { id: item.customerId } }"
                     >
-                        {{ item.customerLastName }}, {{ item.customerFirstName }}
+                        {{ item.customer.lastName }}, {{ item.customer.firstName }}
                     </router-link>
                 </template>
 
                 <template #column-customerNumber="{ item }">
-                    {{ item.customerNumber }}
+                    {{ item.customer.customerNumber }}
                 </template>
 
                 <template #column-customerEmail="{ item }">
-                    {{ item.customerEmail }}
+                    {{ item.customer.email }}
                 </template>
 
                 <template #column-productNumber="{ item }">
                     <router-link :to="{ name: 'sw.product.detail', params: { id: item.productId } }">
-                        {{ item.productNumber }}
+                        {{ item.product.productNumber }}
                     </router-link>
                 </template>
 
                 <template #column-salesChannelName="{ item }">
-                    {{ item.salesChannelName }}
+                    {{ item.salesChannel.name }}
                 </template>
 
                 <template #column-orderNumber="{ item }">
@@ -87,7 +88,7 @@
                         v-if="item.orderId"
                         :to="{ name: 'sw.order.detail', params: { id: item.orderId } }"
                     >
-                        {{ item.orderNumber }}
+                        {{ item.order.orderNumber }}
                     </router-link>
                     <span v-else>—</span>
                 </template>
@@ -96,7 +97,7 @@
                     <sw-label
                         size="small"
                         appearance="pill"
-                        :variant="item.enabled && !item.expired ? 'success' : 'neutral'"
+                        :variant="item.enabled && !isExpired(item) ? 'success' : 'neutral'"
                     >
                         {{ statusLabel(item) }}
                     </sw-label>
@@ -114,6 +115,7 @@
 
                 <template #actions="{ item }">
                     <sw-context-menu-item
+                        v-if="acl.can('extension_mesh.editor')"
                         :router-link="{
                             name: 'extension.mesh.entitlement.detail',
                             params: { id: item.id },
@@ -122,6 +124,7 @@
                         {{ $t('global.default.edit') }}
                     </sw-context-menu-item>
                     <sw-context-menu-item
+                        v-if="acl.can('extension_mesh.deleter')"
                         variant="danger"
                         :disabled="isLoading"
                         @click="confirmDelete(item.id)"

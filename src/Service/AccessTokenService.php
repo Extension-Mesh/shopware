@@ -6,6 +6,7 @@ use ExtensionMesh\Shopware\Exception\ExtensionMeshException;
 use ExtensionMesh\Shopware\Infrastructure\Persistence\AccessTokenRepository;
 use ExtensionMesh\Shopware\Infrastructure\Persistence\EntitlementRepository;
 use Shopware\Core\Framework\Uuid\Uuid;
+use Shopware\Core\Framework\Context;
 
 final class AccessTokenService
 {
@@ -18,29 +19,29 @@ final class AccessTokenService
     ) {
     }
 
-    public function getOrCreate(string $customerId, string $salesChannelId): ?string
+    public function getOrCreate(string $customerId, string $salesChannelId, Context $context): ?string
     {
-        if ($this->entitlements->entitledProductIds($customerId, $salesChannelId) === []) {
+        if ($this->entitlements->entitledProductIds($customerId, $salesChannelId, $context) === []) {
             return null;
         }
 
-        $token = $this->tokens->activeForCustomer($customerId, $salesChannelId)
-            ?? $this->tokens->create($customerId, $salesChannelId);
+        $token = $this->tokens->activeForCustomer($customerId, $salesChannelId, $context)
+            ?? $this->tokens->create($customerId, $salesChannelId, $context);
 
         return $this->encode($token['id']);
     }
 
-    public function rotate(string $customerId, string $salesChannelId): ?string
+    public function rotate(string $customerId, string $salesChannelId, Context $context): ?string
     {
-        $this->tokens->revokeForCustomer($customerId, $salesChannelId);
+        $this->tokens->revokeForCustomer($customerId, $salesChannelId, $context);
 
-        return $this->getOrCreate($customerId, $salesChannelId);
+        return $this->getOrCreate($customerId, $salesChannelId, $context);
     }
 
     /**
      * @return array{id: string, customerId: string, salesChannelId: string}
      */
-    public function authenticate(?string $authorization): array
+    public function authenticate(?string $authorization, Context $context): array
     {
         if (!\is_string($authorization) || !\preg_match('/^Bearer\s+(\S+)$/i', $authorization, $matches)) {
             throw ExtensionMeshException::accessDenied('a bearer access token is required.');
@@ -67,12 +68,12 @@ final class AccessTokenService
         }
 
         $id = Uuid::fromBytesToHex($idBytes);
-        $token = $this->tokens->activeById($id);
+        $token = $this->tokens->activeById($id, $context);
         if ($token === null) {
             throw ExtensionMeshException::accessDenied('the access token is revoked or unknown.');
         }
 
-        $this->tokens->touch($id);
+        $this->tokens->touch($id, $context);
 
         return $token;
     }

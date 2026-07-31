@@ -151,7 +151,7 @@ final class RepositorySynchronizer
         int $offset,
         int $limit = 5
     ): array {
-        $connection = $this->connections->get($id);
+        $connection = $this->connections->get($id, $context);
         if ($connection === null) {
             throw ExtensionMeshException::repositoryNotFound($id);
         }
@@ -165,7 +165,7 @@ final class RepositorySynchronizer
         try {
             return $this->doSynchronizeBatch($connection, $context, \max(0, $offset), \max(1, $limit));
         } catch (\Throwable $exception) {
-            $this->connections->markFailed($id, $exception->getMessage());
+            $this->connections->markFailed($id, $exception->getMessage(), $context);
             throw $exception;
         } finally {
             $this->connections->releaseLock($id);
@@ -174,7 +174,7 @@ final class RepositorySynchronizer
 
     public function synchronizeAll(Context $context): void
     {
-        foreach ($this->connections->all(true) as $connection) {
+        foreach ($this->connections->all(true, $context) as $connection) {
             try {
                 $this->synchronize((string) $connection['id'], $context);
             } catch (\Throwable) {
@@ -199,7 +199,7 @@ final class RepositorySynchronizer
         if (!\is_string($productId)) {
             throw ExtensionMeshException::invalidRepository('the connection has no linked Shopware product.');
         }
-        $this->products->assertProductExists($productId);
+        $this->products->assertProductExists($productId, $context);
 
         $credential = $this->credentials->resolve($connection);
         $provider = $this->providers->get((string) $connection['provider']);
@@ -219,13 +219,14 @@ final class RepositorySynchronizer
         $imported = 0;
         $skipped = 0;
         foreach ($batch as $release) {
-            if ($this->connections->hasImportedRelease((string) $connection['id'], $release['id'])) {
+            if ($this->connections->hasImportedRelease((string) $connection['id'], $release['id'], $context)) {
                 $this->connections->updateImportedReleaseNotes(
                     (string) $connection['id'],
                     (string) $release['id'],
                     \is_string($release['releaseNotes'] ?? null)
                         ? $release['releaseNotes']
-                        : null
+                        : null,
+                    $context
                 );
                 ++$skipped;
                 continue;
@@ -251,11 +252,16 @@ final class RepositorySynchronizer
 
                     if ($expectedTechnicalName === null) {
                         $expectedTechnicalName = $archive['name'];
-                        $this->connections->setTechnicalName((string) $connection['id'], $expectedTechnicalName);
+                        $this->connections->setTechnicalName(
+                            (string) $connection['id'],
+                            $expectedTechnicalName,
+                            $context
+                        );
                     }
                     if ($this->connections->hasImportedVersion(
                         (string) $connection['id'],
-                        (string) $archive['version']
+                        (string) $archive['version'],
+                        $context
                     )) {
                         ++$skipped;
                         break;
@@ -286,7 +292,7 @@ final class RepositorySynchronizer
 
         if ($finished) {
             $this->products->markDigital($productId, $context);
-            $this->connections->markSynchronized((string) $connection['id']);
+            $this->connections->markSynchronized((string) $connection['id'], $context);
         }
 
         return [
@@ -355,7 +361,8 @@ final class RepositorySynchronizer
                 $digest,
                 $mediaId,
                 $downloadId,
-                (string) $release['publishedAt']
+                (string) $release['publishedAt'],
+                $context
             );
         } catch (\Throwable $exception) {
             try {

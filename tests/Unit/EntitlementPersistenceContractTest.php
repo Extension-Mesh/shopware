@@ -2,15 +2,10 @@
 
 namespace ExtensionMesh\Shopware\Test\Unit;
 
-use Doctrine\DBAL\Connection;
-use ExtensionMesh\Shopware\Infrastructure\Persistence\EntitlementRepository;
 use ExtensionMesh\Shopware\Subscriber\OrderEntitlementSubscriber;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Checkout\Order\Aggregate\OrderTransaction\OrderTransactionStates;
 use Shopware\Core\Checkout\Order\OrderStates;
-use Shopware\Core\Defaults;
-use Shopware\Core\Framework\Uuid\Uuid;
-use Shopware\Core\System\SystemConfig\SystemConfigService;
 
 final class EntitlementPersistenceContractTest extends TestCase
 {
@@ -19,6 +14,15 @@ final class EntitlementPersistenceContractTest extends TestCase
         $root = __DIR__ . '/../../src';
         $repository = \file_get_contents(
             $root . '/Infrastructure/Persistence/EntitlementRepository.php'
+        );
+        $definition = \file_get_contents(
+            $root . '/Core/Content/Entitlement/EntitlementDefinition.php'
+        );
+        $entity = \file_get_contents(
+            $root . '/Core/Content/Entitlement/EntitlementEntity.php'
+        );
+        $collection = \file_get_contents(
+            $root . '/Core/Content/Entitlement/EntitlementCollection.php'
         );
         $migration = \file_get_contents(
             $root . '/Migration/Migration1785257000Entitlements.php'
@@ -32,36 +36,26 @@ final class EntitlementPersistenceContractTest extends TestCase
         $config = \file_get_contents($root . '/Resources/config/config.xml');
 
         self::assertIsString($repository);
+        self::assertIsString($definition);
+        self::assertIsString($entity);
+        self::assertIsString($collection);
         self::assertIsString($migration);
         self::assertIsString($controller);
         self::assertIsString($subscriber);
         self::assertIsString($config);
-        self::assertStringContainsString('FROM extension_mesh_entitlement', $repository);
-        self::assertStringNotContainsString('order_line_item_download', $repository);
-        self::assertStringNotContainsString('state_machine_state', $repository);
+        self::assertStringContainsString('EntityRepository', $repository);
+        self::assertStringNotContainsString('Doctrine\\DBAL', $repository);
+        self::assertStringContainsString('extends EntityDefinition', $definition);
+        self::assertStringContainsString('EntitlementEntity::class', $definition);
+        self::assertStringContainsString('EntitlementCollection::class', $definition);
+        self::assertStringContainsString('ManyToOneAssociationField', $definition);
+        self::assertStringContainsString('extends Entity', $entity);
+        self::assertStringContainsString('extends EntityCollection', $collection);
         self::assertStringContainsString('`order_id` BINARY(16) NULL', $migration);
         self::assertStringContainsString('`enabled` TINYINT(1) NOT NULL', $migration);
         self::assertStringContainsString('`valid_until` DATETIME(3) NULL', $migration);
-        self::assertStringContainsString('valid_until IS NULL', $repository);
-        self::assertStringContainsString('valid_until > UTC_TIMESTAMP(3)', $repository);
-        self::assertStringContainsString('customer.customer_number LIKE :search', $repository);
-        self::assertStringContainsString(
-            "'customerId' => 'entitlement.customer_id'",
-            $repository
-        );
-        self::assertStringContainsString(
-            "'productId' => 'entitlement.product_id'",
-            $repository
-        );
-        self::assertStringContainsString(
-            "'salesChannelId' => 'entitlement.sales_channel_id'",
-            $repository
-        );
-        self::assertStringContainsString('entitlement.order_id IS NULL', $repository);
-        self::assertStringContainsString('entitlement.order_id IS NOT NULL', $repository);
-        self::assertStringContainsString("'customerFirstName'", $repository);
-        self::assertStringContainsString("'customerLastName'", $repository);
-        self::assertStringContainsString("'orderLink'", $controller);
+        self::assertStringContainsString("new EqualsFilter('validUntil', null)", $repository);
+        self::assertStringContainsString("new RangeFilter('validUntil'", $repository);
         self::assertStringContainsString(
             'ExtensionMesh.config.orderEntitlementValidityDays',
             $repository
@@ -75,10 +69,10 @@ final class EntitlementPersistenceContractTest extends TestCase
             'UNIQUE KEY `uniq.extension_mesh_entitlement.grant`',
             $migration
         );
-        self::assertStringContainsString('methods: [Request::METHOD_POST]', $controller);
-        self::assertSame(3, \substr_count($controller, 'methods: [Request::METHOD_GET]'));
-        self::assertStringContainsString('methods: [Request::METHOD_PUT]', $controller);
-        self::assertStringContainsString('methods: [Request::METHOD_DELETE]', $controller);
+        self::assertSame(1, \substr_count($controller, 'methods: [Request::METHOD_GET]'));
+        self::assertStringNotContainsString('Request::METHOD_POST', $controller);
+        self::assertStringNotContainsString('Request::METHOD_PUT', $controller);
+        self::assertStringNotContainsString('Request::METHOD_DELETE', $controller);
         self::assertStringContainsString('STATE_PAID', $subscriber);
         self::assertStringContainsString('STATE_REFUNDED', $subscriber);
         self::assertStringContainsString('STATE_CANCELLED', $subscriber);
@@ -120,21 +114,11 @@ final class EntitlementPersistenceContractTest extends TestCase
 
     public function testDisablingAnOrderKeepsItsEntitlementRowsForAudit(): void
     {
-        $orderId = Uuid::randomHex();
-        $connection = $this->createMock(Connection::class);
-        $systemConfig = $this->createMock(SystemConfigService::class);
-        $connection->expects(self::once())
-            ->method('update')
-            ->with(
-                'extension_mesh_entitlement',
-                self::callback(static fn (array $values): bool => $values['enabled'] === 0),
-                self::callback(static fn (array $criteria): bool => (
-                    $criteria['order_id'] === Uuid::fromHexToBytes($orderId)
-                    && $criteria['order_version_id'] === Uuid::fromHexToBytes(Defaults::LIVE_VERSION)
-                ))
-            )
-            ->willReturn(2);
-
-        (new EntitlementRepository($connection, $systemConfig))->disableForOrder($orderId);
+        $repository = \file_get_contents(
+            __DIR__ . '/../../src/Infrastructure/Persistence/EntitlementRepository.php'
+        );
+        self::assertIsString($repository);
+        self::assertStringContainsString("['id' => \$id, 'enabled' => false]", $repository);
+        self::assertStringNotContainsString('->delete(', $repository);
     }
 }

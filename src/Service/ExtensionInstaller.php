@@ -60,7 +60,7 @@ final class ExtensionInstaller
             );
 
             $this->pluginManagementService->uploadPlugin($uploadedFile, $context);
-            $this->ownership->markPrepared($technicalName, $registryUrl);
+            $this->ownership->markPrepared($technicalName, $registryUrl, $context);
         } finally {
             if (\is_file($temporaryPath)) {
                 $this->filesystem->remove($temporaryPath);

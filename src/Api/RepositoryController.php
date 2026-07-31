@@ -5,6 +5,7 @@ namespace ExtensionMesh\Shopware\Api;
 use ExtensionMesh\Shopware\Exception\ExtensionMeshException;
 use ExtensionMesh\Shopware\Service\RepositoryOnboardingService;
 use Shopware\Core\Framework\Routing\ApiRouteScope;
+use Shopware\Core\Framework\Context;
 use Shopware\Core\PlatformRequest;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -22,21 +23,13 @@ final class RepositoryController
     }
 
     #[Route(
-        path: '/api/_action/extension-mesh/repositories',
-        name: 'api.action.extension_mesh.repositories.list',
+        path: '/api/_action/extension-mesh/repositories/providers',
+        name: 'api.action.extension_mesh.repositories.providers',
         methods: [Request::METHOD_GET]
     )]
-    public function list(Request $request): JsonResponse
+    public function providers(): JsonResponse
     {
-        $result = $this->onboarding->paginate(
-            \max(1, $request->query->getInt('page', 1)),
-            \max(1, \min(100, $request->query->getInt('limit', 10)))
-        );
-
-        return new JsonResponse([
-            ...$result,
-            'providers' => $this->onboarding->providers(),
-        ]);
+        return new JsonResponse(['data' => $this->onboarding->providers()]);
     }
 
     #[Route(
@@ -44,7 +37,7 @@ final class RepositoryController
         name: 'api.action.extension_mesh.repositories.connect',
         methods: [Request::METHOD_POST]
     )]
-    public function connect(Request $request): JsonResponse
+    public function connect(Request $request, Context $context): JsonResponse
     {
         try {
             $data = $this->json($request);
@@ -56,7 +49,8 @@ final class RepositoryController
                     $this->string($data, 'apiBaseUrl', 'https://api.github.com'),
                     $this->string($data, 'accessToken'),
                     $this->string($data, 'mode'),
-                    \is_string($data['productId'] ?? null) ? $data['productId'] : null
+                    \is_string($data['productId'] ?? null) ? $data['productId'] : null,
+                    $context
                 ),
             ], Response::HTTP_ACCEPTED);
         } catch (ExtensionMeshException|\JsonException $exception) {
@@ -70,11 +64,11 @@ final class RepositoryController
         requirements: ['id' => '[0-9a-f]{32}'],
         methods: [Request::METHOD_POST]
     )]
-    public function synchronize(string $id): JsonResponse
+    public function synchronize(string $id, Context $context): JsonResponse
     {
         try {
             return new JsonResponse(
-                ['data' => $this->onboarding->queueSynchronization($id)],
+                ['data' => $this->onboarding->queueSynchronization($id, $context)],
                 Response::HTTP_ACCEPTED
             );
         } catch (ExtensionMeshException $exception) {
@@ -88,14 +82,15 @@ final class RepositoryController
         requirements: ['id' => '[0-9a-f]{32}'],
         methods: [Request::METHOD_PUT]
     )]
-    public function credential(string $id, Request $request): JsonResponse
+    public function credential(string $id, Request $request, Context $context): JsonResponse
     {
         try {
             $data = $this->json($request);
             return new JsonResponse([
                 'data' => $this->onboarding->updateCredential(
                     $id,
-                    $this->string($data, 'accessToken')
+                    $this->string($data, 'accessToken'),
+                    $context
                 ),
             ]);
         } catch (ExtensionMeshException|\JsonException $exception) {
@@ -109,10 +104,10 @@ final class RepositoryController
         requirements: ['id' => '[0-9a-f]{32}'],
         methods: [Request::METHOD_DELETE]
     )]
-    public function unlink(string $id): Response
+    public function unlink(string $id, Context $context): Response
     {
         try {
-            $this->onboarding->unlink($id);
+            $this->onboarding->unlink($id, $context);
 
             return new Response(status: Response::HTTP_NO_CONTENT);
         } catch (ExtensionMeshException $exception) {

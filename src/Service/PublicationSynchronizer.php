@@ -28,9 +28,13 @@ final class PublicationSynchronizer
         do {
             $downloads = $this->releases->digitalProductDownloads(
                 $offset,
-                self::BATCH_SIZE
+                self::BATCH_SIZE,
+                $context
             );
-            $cached = $this->releases->byDownloadIds(\array_column($downloads, 'downloadId'));
+            $cached = $this->releases->byDownloadIds(
+                \array_column($downloads, 'downloadId'),
+                $context
+            );
 
             foreach ($downloads as $download) {
                 if (
@@ -41,11 +45,11 @@ final class PublicationSynchronizer
                 }
 
                 if ($download['fileExtension'] !== 'zip') {
-                    $this->saveError($download, 'Only ZIP downloads can be published.');
+                    $this->saveError($download, 'Only ZIP downloads can be published.', $context);
                     continue;
                 }
                 if ($download['fileSize'] <= 0 || $download['fileSize'] > self::MAX_ARCHIVE_BYTES) {
-                    $this->saveError($download, 'The ZIP must contain between 1 byte and 100 MiB.');
+                    $this->saveError($download, 'The ZIP must contain between 1 byte and 100 MiB.', $context);
                     continue;
                 }
 
@@ -81,10 +85,11 @@ final class PublicationSynchronizer
                                 : null,
                         ],
                         $digest,
-                        null
+                        null,
+                        $context
                     );
                 } catch (\Throwable $exception) {
-                    $this->saveError($download, $exception->getMessage());
+                    $this->saveError($download, $exception->getMessage(), $context);
                 } finally {
                     $this->filesystem->remove($temporaryPath);
                 }
@@ -93,13 +98,13 @@ final class PublicationSynchronizer
             $offset += \count($downloads);
         } while (\count($downloads) === self::BATCH_SIZE);
 
-        $this->releases->removeMissingDownloads();
+        $this->releases->removeMissingDownloads($context);
     }
 
     /**
      * @param array<string, mixed> $download
      */
-    private function saveError(array $download, string $message): void
+    private function saveError(array $download, string $message, Context $context): void
     {
         $this->releases->save(
             (string) $download['downloadId'],
@@ -108,7 +113,8 @@ final class PublicationSynchronizer
             (string) $download['fingerprint'],
             null,
             null,
-            \mb_substr($message, 0, 65535)
+            \mb_substr($message, 0, 65535),
+            $context
         );
     }
 

@@ -28,8 +28,10 @@ clear_sources() {
     api_url=$1
     access_token=$2
 
-    curl -fsS "${api_url}/_action/extension-mesh/registries" \
+    curl -fsS -X POST "${api_url}/search/extension-mesh-registry-source" \
         -H "Authorization: Bearer ${access_token}" \
+        -H 'Content-Type: application/json' \
+        --data '{"page":1,"limit":500}' \
         | jq -r '.data[].id' \
         | while IFS= read -r source_id; do
             curl -fsS \
@@ -143,8 +145,10 @@ updated=$(docker compose exec -T buyer bin/console plugin:list --format=json --n
     | jq -er '.[] | select(.name == "AcmeDemoPlugin") | select(.version == "1.1.0" and .active == true) | .version')
 [ "${updated}" = "1.1.0" ] || fail 'native Shopware update did not leave 1.1.0 active'
 
-seller_sources=$(curl -fsS "${seller_api}/_action/extension-mesh/registries" \
+seller_sources=$(curl -fsS -X POST "${seller_api}/search/extension-mesh-registry-source" \
     -H "Authorization: Bearer ${seller_token}" \
+    -H 'Content-Type: application/json' \
+    --data '{"page":1,"limit":500}' \
     | jq -er '.data | length')
 [ "${seller_sources}" = "0" ] || fail 'buyer and seller registry state is not isolated'
 

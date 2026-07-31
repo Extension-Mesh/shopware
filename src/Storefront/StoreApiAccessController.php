@@ -33,7 +33,11 @@ final class StoreApiAccessController
         CustomerEntity $customer
     ): JsonResponse {
         return $this->response(
-            $this->tokens->getOrCreate($customer->getId(), $context->getSalesChannelId()),
+            $this->tokens->getOrCreate(
+                $customer->getId(),
+                $context->getSalesChannelId(),
+                $context->getContext()
+            ),
             $request
         );
     }
@@ -53,7 +57,11 @@ final class StoreApiAccessController
         CustomerEntity $customer
     ): JsonResponse {
         return $this->response(
-            $this->tokens->rotate($customer->getId(), $context->getSalesChannelId()),
+            $this->tokens->rotate(
+                $customer->getId(),
+                $context->getSalesChannelId(),
+                $context->getContext()
+            ),
             $request
         );
     }
