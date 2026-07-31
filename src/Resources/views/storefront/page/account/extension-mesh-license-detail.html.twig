@@ -1,0 +1,127 @@
+{% sw_extends '@Storefront/storefront/page/account/_page.html.twig' %}
+
+{% block page_account_main_content %}
+    <div class="account-welcome">
+        <a class="d-inline-block mb-3" href="{{ path('frontend.extension_mesh.licenses') }}">
+            &larr; {{ 'extensionMesh.licenses.back'|trans|sw_sanitize }}
+        </a>
+
+        <h1>{{ extensionMeshLicense.name }}</h1>
+        <p class="text-body-secondary">{{ extensionMeshLicense.productNumber }}</p>
+
+        <form
+            class="card card-body mb-4"
+            method="get"
+            action="{{ path('frontend.extension_mesh.licenses.detail', {
+                productId: extensionMeshLicense.id
+            }) }}"
+        >
+            <label class="form-label" for="extension-mesh-shopware-filter">
+                {{ 'extensionMesh.licenses.filterLabel'|trans|sw_sanitize }}
+            </label>
+            <div class="d-flex flex-column flex-sm-row gap-2">
+                <select
+                    class="form-select"
+                    id="extension-mesh-shopware-filter"
+                    name="shopware"
+                    required
+                >
+                    <option value="">
+                        {{ 'extensionMesh.licenses.filterPlaceholder'|trans|sw_sanitize }}
+                    </option>
+                    {% for compatibility in extensionMeshCompatibilityOptions %}
+                        <option
+                            value="{{ compatibility }}"
+                            {% if compatibility == extensionMeshSelectedCompatibility %}selected{% endif %}
+                        >
+                            {{ 'extensionMesh.downloads.compatibleWith'|trans({
+                                '%constraint%': compatibility
+                            })|sw_sanitize }}
+                        </option>
+                    {% endfor %}
+                </select>
+                <button class="btn btn-primary flex-shrink-0" type="submit">
+                    {{ 'extensionMesh.licenses.filterSubmit'|trans|sw_sanitize }}
+                </button>
+            </div>
+        </form>
+
+        {% if extensionMeshSelectedCompatibility is empty %}
+            <div class="alert alert-info">
+                {{ 'extensionMesh.licenses.selectCompatibility'|trans|sw_sanitize }}
+            </div>
+        {% elseif extensionMeshReleases.items is empty %}
+            <div class="alert alert-info">
+                {{ 'extensionMesh.licenses.noReleases'|trans|sw_sanitize }}
+            </div>
+        {% else %}
+            {% for group in extensionMeshReleases.groups %}
+                {% set latestRelease = group.releases|first %}
+                <section class="card mb-4">
+                    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <strong>
+                            {{ 'extensionMesh.downloads.compatibleWith'|trans({
+                                '%constraint%': group.shopware
+                            })|sw_sanitize }}
+                        </strong>
+                        <span class="text-body-secondary">
+                            {{ 'extensionMesh.downloads.latestVersion'|trans({
+                                '%version%': latestRelease.version
+                            })|sw_sanitize }}
+                        </span>
+                    </div>
+
+                    <div class="list-group list-group-flush">
+                        {% for release in group.releases %}
+                            <div class="list-group-item">
+                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                                    <span>
+                                        <strong class="d-block">
+                                            {{ 'extensionMesh.licenses.version'|trans({ '%version%': release.version })|sw_sanitize }}
+                                        </strong>
+                                        <small class="text-body-secondary">
+                                            {{ 'extensionMesh.licenses.phpCompatibility'|trans({
+                                                '%php%': release.metadata.php
+                                            })|sw_sanitize }}
+                                        </small>
+                                    </span>
+                                    <a
+                                        class="btn btn-primary btn-sm"
+                                        href="{{ path('frontend.extension_mesh.licenses.download', {
+                                            productId: extensionMeshLicense.id,
+                                            releaseId: release.id
+                                        }) }}"
+                                    >
+                                        {{ 'extensionMesh.licenses.download'|trans|sw_sanitize }}
+                                    </a>
+                                </div>
+
+                                <div class="border-top mt-3 pt-3">
+                                    <h2 class="h6">{{ 'extensionMesh.licenses.changelog'|trans|sw_sanitize }}</h2>
+                                    {% if release.metadata.releaseNotes %}
+                                        <div class="extension-mesh-release-notes">
+                                            {{ extension_mesh_release_notes(release.metadata.releaseNotes) }}
+                                        </div>
+                                    {% else %}
+                                        <p class="text-body-secondary mb-0">
+                                            {{ 'extensionMesh.downloads.noReleaseNotes'|trans|sw_sanitize }}
+                                        </p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </section>
+            {% endfor %}
+        {% endif %}
+
+        {% sw_include '@ExtensionMesh/storefront/page/account/extension-mesh-pagination.html.twig' with {
+            pagination: extensionMeshReleases,
+            route: 'frontend.extension_mesh.licenses.detail',
+            routeParameters: {
+                productId: extensionMeshLicense.id,
+                shopware: extensionMeshSelectedCompatibility
+            }
+        } %}
+    </div>
+{% endblock %}

@@ -50,6 +50,7 @@ final class PublishedReleaseDefinition extends EntityDefinition
             (new StringField('fingerprint', 'fingerprint', 64))->addFlags(new Required()),
             new StringField('technical_name', 'technicalName', 128),
             new StringField('version', 'version', 64),
+            new StringField('shopware_constraint', 'shopwareConstraint', 255),
             new JsonField('metadata', 'metadata'),
             new StringField('sha256', 'sha256', 64),
             new LongTextField('validation_error', 'validationError'),

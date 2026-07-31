@@ -11,6 +11,8 @@ use Shopware\Core\Content\Product\Aggregate\ProductDownload\ProductDownloadEntit
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Aggregation\Bucket\TermsAggregation;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\AggregationResult\Bucket\TermsResult;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsAnyFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
@@ -147,6 +149,9 @@ final class PublicationRepository implements PublicationReader
             'fingerprint' => $fingerprint,
             'technicalName' => $metadata['name'] ?? null,
             'version' => $metadata['version'] ?? null,
+            'shopwareConstraint' => \is_string($metadata['shopware'] ?? null)
+                ? $metadata['shopware']
+                : null,
             'metadata' => $metadata,
             'sha256' => $sha256,
             'validationError' => $validationError,
@@ -197,6 +202,74 @@ final class PublicationRepository implements PublicationReader
             ->addSorting(new FieldSorting('version'));
 
         return $this->hydrateMany($this->releases->search($criteria, $context)->getElements());
+    }
+
+    /**
+     * Loads one bounded release page and one look-ahead row. Avoiding an exact
+     * count keeps the account page stable even for products with long histories.
+     *
+     * @return array{items: list<array<string, mixed>>, page: int, hasPrevious: bool, hasNext: bool}
+     */
+    public function paginateValidForProduct(
+        string $productId,
+        string $shopwareConstraint,
+        int $page,
+        int $limit,
+        Context $context
+    ): array {
+        $page = \max(1, \min(10000, $page));
+        $limit = \max(1, \min(50, $limit));
+        if (!Uuid::isValid($productId)) {
+            return ['items' => [], 'page' => $page, 'hasPrevious' => $page > 1, 'hasNext' => false];
+        }
+
+        $criteria = $this->validCriteria()
+            ->addFilter(new EqualsFilter('productId', $productId))
+            ->addFilter(new EqualsFilter('shopwareConstraint', $shopwareConstraint))
+            ->addSorting(new FieldSorting('createdAt', FieldSorting::DESCENDING))
+            ->addSorting(new FieldSorting('id', FieldSorting::DESCENDING))
+            ->setTotalCountMode(Criteria::TOTAL_COUNT_MODE_NONE)
+            ->setOffset(($page - 1) * $limit)
+            ->setLimit($limit + 1);
+        $result = $this->releases->search($criteria, $context);
+        $hasNext = $result->count() > $limit;
+        $items = $this->hydrateMany(\array_slice($result->getElements(), 0, $limit, true));
+
+        return [
+            'items' => $items,
+            'page' => $page,
+            'hasPrevious' => $page > 1,
+            'hasNext' => $hasNext,
+        ];
+    }
+
+    /** @return list<string> */
+    public function compatibilityOptionsForProduct(string $productId, Context $context): array
+    {
+        if (!Uuid::isValid($productId)) {
+            return [];
+        }
+
+        $criteria = $this->validCriteria()
+            ->addFilter(new EqualsFilter('productId', $productId))
+            ->addFilter(new NotFilter(NotFilter::CONNECTION_AND, [
+                new EqualsFilter('shopwareConstraint', null),
+            ]))
+            ->addAggregation(new TermsAggregation(
+                'shopware-compatibility',
+                'shopwareConstraint',
+                100
+            ));
+        $aggregation = $this->releases->aggregate($criteria, $context)
+            ->get('shopware-compatibility');
+        if (!$aggregation instanceof TermsResult) {
+            return [];
+        }
+
+        return \array_values(\array_filter(
+            $aggregation->getKeys(),
+            static fn (string $key): bool => $key !== ''
+        ));
     }
 
     /**
@@ -263,6 +336,7 @@ final class PublicationRepository implements PublicationReader
             'fingerprint' => $entity->getFingerprint(),
             'technicalName' => $entity->getTechnicalName(),
             'version' => $entity->getVersion(),
+            'shopwareConstraint' => $entity->getShopwareConstraint(),
             'metadata' => $entity->getMetadata(),
             'sha256' => $entity->getSha256(),
             'validationError' => $entity->getValidationError(),

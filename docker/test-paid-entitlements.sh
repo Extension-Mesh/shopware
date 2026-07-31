@@ -86,6 +86,41 @@ clear_seller_entitlements() {
         done
 }
 
+wait_for_published_release() {
+    product_id_to_find=$1
+    version_to_find=$2
+    output_file=$3
+    attempt=0
+
+    while [ "${attempt}" -lt 20 ]; do
+        curl -fsS \
+            -X POST "${seller_api}/search/extension-mesh-published-release" \
+            -H "Authorization: Bearer ${seller_admin_token}" \
+            -H 'Content-Type: application/json' \
+            --data "$(jq -nc \
+                --arg productId "${product_id_to_find}" \
+                '{page:1,limit:10,filter:[
+                    {type:"equals",field:"productId",value:$productId}
+                ]}')" \
+            -o "${output_file}"
+        if jq -e \
+            --arg productId "${product_id_to_find}" \
+            --arg version "${version_to_find}" \
+            '.data[] | select(
+                .attributes.productId == $productId
+                and .attributes.technicalName == "AcmeDemoPlugin"
+                and .attributes.version == $version
+                and .attributes.validationError == null
+            )' "${output_file}" >/dev/null; then
+            return 0
+        fi
+        attempt=$((attempt + 1))
+        sleep 1
+    done
+
+    return 1
+}
+
 reset_buyer_plugin() {
     installed_json=$(curl -fsS "${buyer_api}/_action/extension/installed" \
         -H "Authorization: Bearer ${buyer_admin_token}")
@@ -265,20 +300,22 @@ expect_status 204 "${temporary_dir}/publication-sync-v1.json" \
     -H "Authorization: Bearer ${seller_admin_token}" \
     -H 'Content-Type: application/json' \
     --data '{}'
-expect_status 200 "${temporary_dir}/publication-v1.json" \
+wait_for_published_release \
+    "${product_id}" \
+    '1.0.0' \
+    "${temporary_dir}/publication-v1.json" \
+    || fail 'the first digital-product ZIP was not published'
+expect_status 200 "${temporary_dir}/normal-product-publications.json" \
     -X POST "${seller_api}/search/extension-mesh-published-release" \
     -H "Authorization: Bearer ${seller_admin_token}" \
     -H 'Content-Type: application/json' \
-    --data '{"page":1,"limit":100}'
-jq -e '.data[] | select(
-    .attributes.productId == "'"${product_id}"'"
-    and .attributes.technicalName == "AcmeDemoPlugin"
-    and .attributes.version == "1.0.0"
-    and .attributes.validationError == null
-)' "${temporary_dir}/publication-v1.json" >/dev/null \
-    || fail 'the first digital-product ZIP was not published'
-jq -e '[.data[] | select(.attributes.productId == "'"${normal_product_id}"'")] | length == 0' \
-    "${temporary_dir}/publication-v1.json" >/dev/null \
+    --data "$(jq -nc \
+        --arg productId "${normal_product_id}" \
+        '{page:1,limit:1,filter:[
+            {type:"equals",field:"productId",value:$productId}
+        ]}')"
+jq -e '.data | length == 0' \
+    "${temporary_dir}/normal-product-publications.json" >/dev/null \
     || fail 'a normal digital product was published without explicit Extension Mesh opt-in'
 
 expect_status 200 "${temporary_dir}/product-downloads-v1.json" \
@@ -402,6 +439,59 @@ jq -e '.extensions[] | select(
 )' "${temporary_dir}/manual-smoke-registry.json" >/dev/null \
     || fail 'a standalone manual entitlement did not grant update access'
 
+account_cookies="${temporary_dir}/account-cookies.txt"
+expect_status 302 "${temporary_dir}/account-login.html" \
+    -c "${account_cookies}" \
+    -b "${account_cookies}" \
+    -X POST "${seller_storefront}/account/login" \
+    --data-urlencode "username=${buyer_email}" \
+    --data-urlencode 'password=Testpass123!' \
+    --data-urlencode 'redirectTo=frontend.extension_mesh.licenses'
+expect_status 200 "${temporary_dir}/account-licenses.html" \
+    -c "${account_cookies}" \
+    -b "${account_cookies}" \
+    "${seller_storefront}/account/extension-licenses"
+grep -F "EM-PAID-FIXTURE-${product_id}" \
+    "${temporary_dir}/account-licenses.html" >/dev/null \
+    || fail 'the standalone entitlement was missing from the paginated account license screen'
+grep -F "/account/extension-licenses/${product_id}" \
+    "${temporary_dir}/account-licenses.html" >/dev/null \
+    || fail 'the account license screen did not link to the license detail page'
+
+release_v1_id=$(jq -er \
+    '.data[] | select(.attributes.version == "1.0.0") | .id' \
+    "${temporary_dir}/publication-v1.json")
+expect_status 200 "${temporary_dir}/account-license-detail.html" \
+    -c "${account_cookies}" \
+    -b "${account_cookies}" \
+    "${seller_storefront}/account/extension-licenses/${product_id}"
+grep -F 'name="shopware"' "${temporary_dir}/account-license-detail.html" >/dev/null \
+    || fail 'the account license detail did not ask for a Shopware compatibility first'
+grep -F 'value="~6.7.0"' "${temporary_dir}/account-license-detail.html" >/dev/null \
+    || fail 'the account license detail did not expose the available Shopware compatibility'
+if grep -F 'Version 1.0.0' "${temporary_dir}/account-license-detail.html" >/dev/null; then
+    fail 'the account license detail loaded releases before selecting a Shopware compatibility'
+fi
+expect_status 200 "${temporary_dir}/account-license-detail-filtered.html" \
+    -c "${account_cookies}" \
+    -b "${account_cookies}" \
+    "${seller_storefront}/account/extension-licenses/${product_id}?shopware=~6.7.0"
+grep -F 'Version 1.0.0' "${temporary_dir}/account-license-detail-filtered.html" >/dev/null \
+    || fail 'the account license detail did not expose the validated release'
+grep -F 'Shopware ~6.7.0' "${temporary_dir}/account-license-detail-filtered.html" >/dev/null \
+    || fail 'the account license detail did not filter releases by Shopware compatibility'
+grep -F "/account/extension-licenses/${product_id}/releases/${release_v1_id}/download" \
+    "${temporary_dir}/account-license-detail-filtered.html" >/dev/null \
+    || fail 'the account license detail did not expose its protected download route'
+expect_status 200 "${temporary_dir}/account-license-v1.zip" \
+    -c "${account_cookies}" \
+    -b "${account_cookies}" \
+    "${seller_storefront}/account/extension-licenses/${product_id}/releases/${release_v1_id}/download"
+account_download_digest=$(shasum -a 256 "${temporary_dir}/account-license-v1.zip" | awk '{print $1}')
+fixture_v1_digest=$(shasum -a 256 docker/registry/public/AcmeDemoPlugin-1.0.0.zip | awk '{print $1}')
+[ "${account_download_digest}" = "${fixture_v1_digest}" ] \
+    || fail 'the session-protected account download returned the wrong artifact'
+
 manual_smoke_disabled_payload=$(printf '%s' "${manual_smoke_payload}" \
     | jq '.enabled = false')
 expect_status 204 "${temporary_dir}/manual-smoke-disable.json" \
@@ -454,6 +544,7 @@ expect_status 200 "${temporary_dir}/order.json" \
     -H 'Content-Type: application/json' \
     --data '{}'
 order_id=$(jq -er '.id' "${temporary_dir}/order.json")
+order_deep_link_code=$(jq -er '.deepLinkCode' "${temporary_dir}/order.json")
 transaction_id=$(jq -er '.primaryOrderTransaction.id' "${temporary_dir}/order.json")
 ordered_download_id=$(jq -er '.lineItems[] | select(.productId == "'"${product_id}"'") | .downloads[0].id' \
     "${temporary_dir}/order.json")
@@ -467,6 +558,17 @@ granted=$(curl -fsS "${seller_api}/order-line-item-download/${ordered_download_i
     -H "Authorization: Bearer ${seller_admin_token}" \
     | jq -er '.data.attributes.accessGranted')
 [ "${granted}" = "true" ] || fail 'Shopware did not grant the paid digital-product download'
+
+expect_status 200 "${temporary_dir}/account-order.html" \
+    -c "${account_cookies}" \
+    -b "${account_cookies}" \
+    "${seller_storefront}/account/order/${order_deep_link_code}"
+grep -F "/account/extension-licenses/${product_id}" \
+    "${temporary_dir}/account-order.html" >/dev/null \
+    || fail 'the order download did not link back to the extension license screen'
+if grep -F 'extension-mesh-versions-' "${temporary_dir}/account-order.html" >/dev/null; then
+    fail 'the order screen still duplicated the Extension Mesh release history'
+fi
 
 expect_status 200 "${temporary_dir}/automatic-entitlements.json" \
     -X POST "${seller_api}/search/extension-mesh-entitlement" \
@@ -706,4 +808,4 @@ expect_status 204 "${temporary_dir}/delete-automatic-entitlement.json" \
     -X DELETE "${seller_api}/extension-mesh-entitlement/${automatic_entitlement_id}" \
     -H "Authorization: Bearer ${seller_admin_token}"
 
-echo "Paid entitlement test passed: isolated standalone manual CRUD/access, filtered listing, perpetual automatic issuance, parallel grants, optional order linkage, rotation, refund revocation and seller override."
+echo "Paid entitlement test passed: standalone access, paginated account downloads, order links, automatic issuance, rotation, refund revocation and seller override."

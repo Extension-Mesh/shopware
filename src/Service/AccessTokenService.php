@@ -4,7 +4,6 @@ namespace ExtensionMesh\Shopware\Service;
 
 use ExtensionMesh\Shopware\Exception\ExtensionMeshException;
 use ExtensionMesh\Shopware\Infrastructure\Persistence\AccessTokenRepository;
-use ExtensionMesh\Shopware\Infrastructure\Persistence\EntitlementRepository;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Context;
 
@@ -14,14 +13,14 @@ final class AccessTokenService
 
     public function __construct(
         private readonly AccessTokenRepository $tokens,
-        private readonly EntitlementRepository $entitlements,
+        private readonly CustomerProductAccessResolver $access,
         private readonly string $appSecret
     ) {
     }
 
     public function getOrCreate(string $customerId, string $salesChannelId, Context $context): ?string
     {
-        if ($this->entitlements->entitledProductIds($customerId, $salesChannelId, $context) === []) {
+        if ($this->access->productIds($customerId, $salesChannelId, $context) === []) {
             return null;
         }
 

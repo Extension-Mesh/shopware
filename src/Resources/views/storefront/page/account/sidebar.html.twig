@@ -4,6 +4,15 @@
     {{ parent() }}
 
     <a
+        href="{{ path('frontend.extension_mesh.licenses') }}"
+        title="{{ 'extensionMesh.licenses.title'|trans|striptags }}"
+        class="list-group-item list-group-item-action account-aside-item{% if activeRoute starts with('frontend.extension_mesh.licenses') %} is-active{% endif %}"
+        {% if activeRoute starts with('frontend.extension_mesh.licenses') %}aria-current="page"{% endif %}
+    >
+        {{ 'extensionMesh.licenses.title'|trans|sw_sanitize }}
+    </a>
+
+    <a
         href="{{ path('frontend.extension_mesh.account') }}"
         title="{{ 'extensionMesh.account.title'|trans|striptags }}"
         class="list-group-item list-group-item-action account-aside-item{% if activeRoute starts with('frontend.extension_mesh.account') %} is-active{% endif %}"

@@ -3,7 +3,6 @@
 namespace ExtensionMesh\Shopware\Service;
 
 use ExtensionMesh\Shopware\Exception\ExtensionMeshException;
-use ExtensionMesh\Shopware\Infrastructure\Persistence\EntitlementRepository;
 use ExtensionMesh\Shopware\Infrastructure\Persistence\PublicationRepository;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
@@ -13,7 +12,7 @@ final class PublisherCatalogService
     public function __construct(
         private readonly PublicationSynchronizer $synchronizer,
         private readonly PublicationRepository $releases,
-        private readonly EntitlementRepository $entitlements,
+        private readonly CustomerProductAccessResolver $access,
         private readonly SystemConfigService $systemConfig
     ) {
     }
@@ -28,7 +27,7 @@ final class PublisherCatalogService
         Context $context
     ): array {
         $this->synchronizer->synchronize($context);
-        $productIds = $this->entitlements->entitledProductIds($customerId, $salesChannelId, $context);
+        $productIds = $this->access->productIds($customerId, $salesChannelId, $context);
         $published = $this->releases->validForProducts($productIds, $context);
 
         /** @var array<string, array<string, mixed>> $extensions */

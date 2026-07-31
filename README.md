@@ -18,6 +18,7 @@ lifecycle for installation and updates.
 - Publication from digital-product ZIP files
 - GitHub release synchronization for seller repositories
 - Customer-scoped access tokens for restricted extensions
+- Paginated customer-account license and release downloads
 - Encrypted registry and repository credentials
 
 ## Installation
@@ -53,8 +54,9 @@ returned through the Administration API.
 1. Create a digital product.
 2. Attach a conventional Shopware plugin ZIP as a product download.
 3. Complete the product configuration and access settings.
-4. Provide entitled customers with the registry URL and token shown under
-   **Account → Extension access**.
+4. Entitled customers can download releases under **Account → My extensions**
+   or connect another Shopware installation with the registry URL and token
+   shown under **Account → Extension access**.
 
 ExtensionMesh validates each plugin ZIP, derives its metadata, calculates its
 SHA-256 checksum and exposes compatible releases through the seller registry.

@@ -1,0 +1,34 @@
+{% if pagination.hasPrevious or pagination.hasNext %}
+    <nav
+        class="d-flex justify-content-between align-items-center"
+        aria-label="{{ 'extensionMesh.licenses.pagination'|trans|striptags }}"
+    >
+        {% if pagination.hasPrevious %}
+            <a
+                class="btn btn-outline-secondary"
+                rel="prev"
+                href="{{ path(route, routeParameters|merge({ page: pagination.page - 1 })) }}"
+            >
+                &larr; {{ 'extensionMesh.licenses.previous'|trans|sw_sanitize }}
+            </a>
+        {% else %}
+            <span></span>
+        {% endif %}
+
+        <span class="text-body-secondary">
+            {{ 'extensionMesh.licenses.page'|trans({ '%page%': pagination.page })|sw_sanitize }}
+        </span>
+
+        {% if pagination.hasNext %}
+            <a
+                class="btn btn-outline-secondary"
+                rel="next"
+                href="{{ path(route, routeParameters|merge({ page: pagination.page + 1 })) }}"
+            >
+                {{ 'extensionMesh.licenses.next'|trans|sw_sanitize }} &rarr;
+            </a>
+        {% else %}
+            <span></span>
+        {% endif %}
+    </nav>
+{% endif %}

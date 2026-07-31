@@ -12,19 +12,26 @@ use Symfony\Component\HttpFoundation\RequestStack;
 
 final class StorefrontDownloadCatalogTest extends TestCase
 {
-    public function testItGroupsManagedDownloadsAndLeavesNormalDownloadsAlone(): void
+    public function testItLinksEachManagedProductOnceAndLeavesNormalDownloadsAlone(): void
     {
         $mediaV1 = Uuid::randomHex();
         $mediaV2 = Uuid::randomHex();
         $mediaV2Duplicate = Uuid::randomHex();
         $newerShopwareMedia = Uuid::randomHex();
         $normalMedia = Uuid::randomHex();
+        $product = Uuid::randomHex();
+        $newerProduct = Uuid::randomHex();
         $releases = $this->createMock(PublicationReader::class);
         $releases->method('byMediaIds')->willReturn([
-            $mediaV1 => $this->release($mediaV1, '1.2.0', '^6.6'),
-            $mediaV2Duplicate => $this->release($mediaV2Duplicate, '1.10.0', '^6.6'),
-            $mediaV2 => $this->release($mediaV2, '1.10.0', '^6.6', 'Fixes the important issue.'),
-            $newerShopwareMedia => $this->release($newerShopwareMedia, '2.0.0', '~6.7.0'),
+            $mediaV1 => $this->release($mediaV1, $product, '1.2.0', '^6.6'),
+            $mediaV2Duplicate => $this->release($mediaV2Duplicate, $product, '1.10.0', '^6.6'),
+            $mediaV2 => $this->release($mediaV2, $product, '1.10.0', '^6.6'),
+            $newerShopwareMedia => $this->release(
+                $newerShopwareMedia,
+                $newerProduct,
+                '2.0.0',
+                '~6.7.0'
+            ),
         ]);
         $catalog = new StorefrontDownloadCatalog($releases, new RequestStack());
         $normal = $this->download($normalMedia);
@@ -38,25 +45,19 @@ final class StorefrontDownloadCatalogTest extends TestCase
         ], Context::createCLIContext());
 
         self::assertSame([$normal], $result['normal']);
-        self::assertCount(2, $result['groups']);
-        self::assertSame(['~6.7.0', '^6.6'], \array_column($result['groups'], 'shopware'));
-        self::assertCount(2, $result['groups'][1]['releases']);
+        self::assertCount(2, $result['managed']);
         self::assertSame(
-            ['1.10.0', '1.2.0'],
-            \array_column(\array_column($result['groups'][1]['releases'], 'release'), 'version')
-        );
-        self::assertSame(
-            'Fixes the important issue.',
-            $result['groups'][1]['releases'][0]['release']['metadata']['releaseNotes']
+            [$product, $newerProduct],
+            \array_column(\array_column($result['managed'], 'release'), 'productId')
         );
         $template = \file_get_contents(
             __DIR__ . '/../../../src/Resources/views/storefront/component/line-item/element/'
-                . 'extension-mesh-download-item.html.twig'
+                . 'downloads.html.twig'
         );
         self::assertIsString($template);
-        self::assertStringContainsString('metadata.releaseNotes', $template);
-        self::assertStringContainsString('extension_mesh_release_notes', $template);
-        self::assertStringNotContainsString('extensionMesh.downloads.shopware', $template);
+        self::assertStringContainsString('frontend.extension_mesh.licenses.detail', $template);
+        self::assertStringNotContainsString('showOlder', $template);
+        self::assertStringNotContainsString('extension-mesh-download-item', $template);
     }
 
     private function download(string $mediaId): OrderLineItemDownloadEntity
@@ -73,15 +74,15 @@ final class StorefrontDownloadCatalogTest extends TestCase
      */
     private function release(
         string $mediaId,
+        string $productId,
         string $version,
-        string $shopware,
-        ?string $releaseNotes = null
+        string $shopware
     ): array
     {
         return [
             'id' => Uuid::randomHex(),
             'downloadId' => Uuid::randomHex(),
-            'productId' => Uuid::randomHex(),
+            'productId' => $productId,
             'mediaId' => $mediaId,
             'fingerprint' => \hash('sha256', $mediaId),
             'technicalName' => 'ExamplePlugin',
@@ -90,7 +91,7 @@ final class StorefrontDownloadCatalogTest extends TestCase
                 'name' => 'ExamplePlugin',
                 'version' => $version,
                 'shopware' => $shopware,
-                'releaseNotes' => $releaseNotes,
+                'label' => 'Example plugin',
             ],
             'sha256' => \hash('sha256', $version),
             'validationError' => null,

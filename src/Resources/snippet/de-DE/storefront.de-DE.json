@@ -4,16 +4,38 @@
       "compatibleWith": "Shopware %constraint%",
       "latestVersion": "Neueste Version: %version%",
       "noReleaseNotes": "Für diese Version wurden keine Versionshinweise hinterlegt.",
-      "showOlder": "%count% ältere Version(en) anzeigen"
+      "showOlder": "%count% ältere Version(en) anzeigen",
+      "openLicense": "Erweiterungsdownloads öffnen",
+      "managedInLicenses": "Versionen und Updates sind unter Meine Erweiterungen verfügbar."
+    },
+    "licenses": {
+      "title": "Meine Erweiterungen",
+      "explanation": "Lade die für dieses Kundenkonto verfügbaren Erweiterungen und Versionen herunter.",
+      "empty": "Für dieses Kundenkonto sind derzeit keine Erweiterungslizenzen verfügbar.",
+      "back": "Zurück zu meinen Erweiterungen",
+      "filterLabel": "Kompatible Shopware-Version",
+      "filterPlaceholder": "Shopware-Version auswählen",
+      "filterSubmit": "Versionen anzeigen",
+      "selectCompatibility": "Wähle eine kompatible Shopware-Version aus, um Versionen und Änderungsprotokolle zu sehen.",
+      "noReleases": "Für diese Erweiterung sind derzeit keine validierten Versionen verfügbar.",
+      "version": "Version %version%",
+      "compatibility": "Shopware %shopware% · PHP %php%",
+      "phpCompatibility": "PHP %php%",
+      "changelog": "Änderungsprotokoll",
+      "download": "Herunterladen",
+      "pagination": "Erweiterungsseiten",
+      "previous": "Zurück",
+      "next": "Weiter",
+      "page": "Seite %page%"
     },
     "account": {
       "title": "Erweiterungszugang",
-      "explanation": "Verwende diese Daten in ExtensionMesh auf der Shopware-Installation, die deine gekauften Erweiterungen und Updates erhalten soll.",
+      "explanation": "Verwende diese Daten in ExtensionMesh auf der Shopware-Installation, die deine verfügbaren Erweiterungen und Updates erhalten soll.",
       "registryUrl": "Registry-URL",
       "accessToken": "Zugriffstoken",
       "secretWarning": "Behandle dieses Token wie ein Passwort. Beim Erneuern wird das vorherige Token sofort ungültig.",
       "rotate": "Zugriffstoken erneuern",
-      "noEntitlements": "Für dieses Kundenkonto ist keine aktive Berechtigung für ein digitales Produkt vorhanden."
+      "noEntitlements": "Für dieses Kundenkonto ist derzeit kein Extension-Mesh-Zugang verfügbar."
     }
   }
 }

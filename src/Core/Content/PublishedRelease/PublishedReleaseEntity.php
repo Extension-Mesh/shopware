@@ -20,6 +20,7 @@ final class PublishedReleaseEntity extends Entity
     protected string $fingerprint;
     protected ?string $technicalName = null;
     protected ?string $version = null;
+    protected ?string $shopwareConstraint = null;
     /** @var array<string, mixed>|null */
     protected ?array $metadata = null;
     protected ?string $sha256 = null;
@@ -107,6 +108,17 @@ final class PublishedReleaseEntity extends Entity
     {
         $this->version = $value;
     }
+
+    public function getShopwareConstraint(): ?string
+    {
+        return $this->shopwareConstraint;
+    }
+
+    public function setShopwareConstraint(?string $value): void
+    {
+        $this->shopwareConstraint = $value;
+    }
+
     /** @return array<string, mixed>|null */
     public function getMetadata(): ?array
     {

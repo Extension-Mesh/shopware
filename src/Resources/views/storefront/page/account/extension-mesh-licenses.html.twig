@@ -1,0 +1,35 @@
+{% sw_extends '@Storefront/storefront/page/account/_page.html.twig' %}
+
+{% block page_account_main_content %}
+    <div class="account-welcome">
+        <h1>{{ 'extensionMesh.licenses.title'|trans|sw_sanitize }}</h1>
+        <p>{{ 'extensionMesh.licenses.explanation'|trans|sw_sanitize }}</p>
+
+        {% if extensionMeshLicenses.items is empty %}
+            <div class="alert alert-info">
+                {{ 'extensionMesh.licenses.empty'|trans|sw_sanitize }}
+            </div>
+        {% else %}
+            <div class="list-group mb-4">
+                {% for license in extensionMeshLicenses.items %}
+                    <a
+                        class="list-group-item list-group-item-action d-flex justify-content-between align-items-center gap-3"
+                        href="{{ path('frontend.extension_mesh.licenses.detail', { productId: license.id }) }}"
+                    >
+                        <span>
+                            <strong class="d-block">{{ license.name }}</strong>
+                            <small class="text-body-secondary">{{ license.productNumber }}</small>
+                        </span>
+                        <span aria-hidden="true">&rsaquo;</span>
+                    </a>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        {% sw_include '@ExtensionMesh/storefront/page/account/extension-mesh-pagination.html.twig' with {
+            pagination: extensionMeshLicenses,
+            route: 'frontend.extension_mesh.licenses',
+            routeParameters: {}
+        } %}
+    </div>
+{% endblock %}

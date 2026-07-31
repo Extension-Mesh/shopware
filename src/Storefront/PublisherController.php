@@ -3,9 +3,9 @@
 namespace ExtensionMesh\Shopware\Storefront;
 
 use ExtensionMesh\Shopware\Exception\ExtensionMeshException;
-use ExtensionMesh\Shopware\Infrastructure\Persistence\EntitlementRepository;
 use ExtensionMesh\Shopware\Infrastructure\Persistence\PublicationRepository;
 use ExtensionMesh\Shopware\Service\AccessTokenService;
+use ExtensionMesh\Shopware\Service\CustomerProductAccessResolver;
 use ExtensionMesh\Shopware\Service\PublicationSynchronizer;
 use ExtensionMesh\Shopware\Service\PublisherCatalogService;
 use Shopware\Core\Content\Media\MediaService;
@@ -29,7 +29,7 @@ final class PublisherController extends AbstractController
         private readonly PublisherCatalogService $catalog,
         private readonly PublicationSynchronizer $synchronizer,
         private readonly PublicationRepository $releases,
-        private readonly EntitlementRepository $entitlements,
+        private readonly CustomerProductAccessResolver $access,
         private readonly MediaService $mediaService
     ) {
     }
@@ -82,7 +82,7 @@ final class PublisherController extends AbstractController
             if (
                 $release === null
                 || $release['validationError'] !== null
-                || !$this->entitlements->isEntitled(
+                || !$this->access->grants(
                     $token['customerId'],
                     $release['productId'],
                     $token['salesChannelId'],

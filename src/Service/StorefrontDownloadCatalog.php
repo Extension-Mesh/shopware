@@ -27,10 +27,7 @@ final class StorefrontDownloadCatalog
      * @param iterable<OrderLineItemDownloadEntity> $downloads
      *
      * @return array{
-     *     groups: list<array{
-     *         shopware: string,
-     *         releases: list<array{download: OrderLineItemDownloadEntity, release: array<string, mixed>}>
-     *     }>,
+     *     managed: list<array{download: OrderLineItemDownloadEntity, release: array<string, mixed>}>,
      *     normal: list<OrderLineItemDownloadEntity>
      * }
      */
@@ -56,47 +53,18 @@ final class StorefrontDownloadCatalog
         }
 
         $normal = [];
-        $groups = [];
+        $managed = [];
         foreach ($items as $download) {
             $release = $this->releasesByMediaId[$download->getMediaId()] ?? null;
-            $shopware = $release['metadata']['shopware'] ?? null;
-            if (!\is_array($release) || !\is_string($shopware) || $shopware === '') {
+            $productId = $release['productId'] ?? null;
+            if (!\is_array($release) || !\is_string($productId) || $productId === '') {
                 $normal[] = $download;
                 continue;
             }
-            $groups[$shopware][] = ['download' => $download, 'release' => $release];
+            $managed[$productId] ??= ['download' => $download, 'release' => $release];
         }
 
-        \uksort($groups, $this->compareShopwareConstraints(...));
-        $result = [];
-        foreach ($groups as $shopware => $releases) {
-            $releasesByVersion = [];
-            foreach ($releases as $release) {
-                $version = (string) ($release['release']['version'] ?? '');
-                $existingNotes = $releasesByVersion[$version]['release']['metadata']['releaseNotes'] ?? null;
-                $candidateNotes = $release['release']['metadata']['releaseNotes'] ?? null;
-                if (
-                    !isset($releasesByVersion[$version])
-                    || (
-                        (!\is_string($existingNotes) || $existingNotes === '')
-                        && \is_string($candidateNotes)
-                        && $candidateNotes !== ''
-                    )
-                ) {
-                    $releasesByVersion[$version] = $release;
-                }
-            }
-            $releases = \array_values($releasesByVersion);
-            \usort($releases, static function (array $left, array $right): int {
-                $leftVersion = \ltrim((string) ($left['release']['version'] ?? ''), 'vV');
-                $rightVersion = \ltrim((string) ($right['release']['version'] ?? ''), 'vV');
-
-                return \version_compare($rightVersion, $leftVersion);
-            });
-            $result[] = ['shopware' => $shopware, 'releases' => $releases];
-        }
-
-        return ['groups' => $result, 'normal' => $normal];
+        return ['managed' => \array_values($managed), 'normal' => $normal];
     }
 
     private function salesChannelContext(): ?SalesChannelContext
@@ -108,35 +76,4 @@ final class StorefrontDownloadCatalog
         return $context instanceof SalesChannelContext ? $context : null;
     }
 
-    private function compareShopwareConstraints(string $left, string $right): int
-    {
-        $leftVersion = $this->constraintVersion($left);
-        $rightVersion = $this->constraintVersion($right);
-        if ($leftVersion !== null && $rightVersion !== null) {
-            $comparison = \version_compare($rightVersion, $leftVersion);
-            if ($comparison !== 0) {
-                return $comparison;
-            }
-        } elseif ($leftVersion !== null) {
-            return -1;
-        } elseif ($rightVersion !== null) {
-            return 1;
-        }
-
-        return \strnatcasecmp($right, $left);
-    }
-
-    private function constraintVersion(string $constraint): ?string
-    {
-        if (!\preg_match('/(?<!\d)(\d+(?:\.\d+){0,3})/D', $constraint, $match)) {
-            return null;
-        }
-
-        $parts = \explode('.', $match[1]);
-        while (\count($parts) < 4) {
-            $parts[] = '0';
-        }
-
-        return \implode('.', $parts);
-    }
 }

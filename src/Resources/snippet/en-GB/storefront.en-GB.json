@@ -4,16 +4,38 @@
       "compatibleWith": "Shopware %constraint%",
       "latestVersion": "Latest: %version%",
       "noReleaseNotes": "No release notes were provided for this version.",
-      "showOlder": "Show %count% older version(s)"
+      "showOlder": "Show %count% older version(s)",
+      "openLicense": "Open extension downloads",
+      "managedInLicenses": "Versions and updates are available under My extensions."
+    },
+    "licenses": {
+      "title": "My extensions",
+      "explanation": "Download the extensions and versions available to this customer account.",
+      "empty": "No extension licenses are currently available for this customer account.",
+      "back": "Back to my extensions",
+      "filterLabel": "Compatible Shopware version",
+      "filterPlaceholder": "Select a Shopware version",
+      "filterSubmit": "Show releases",
+      "selectCompatibility": "Select a compatible Shopware version to see its releases and changelogs.",
+      "noReleases": "No validated releases are currently available for this extension.",
+      "version": "Version %version%",
+      "compatibility": "Shopware %shopware% · PHP %php%",
+      "phpCompatibility": "PHP %php%",
+      "changelog": "Changelog",
+      "download": "Download",
+      "pagination": "Extension pages",
+      "previous": "Previous",
+      "next": "Next",
+      "page": "Page %page%"
     },
     "account": {
       "title": "Extension access",
-      "explanation": "Use these details in ExtensionMesh on the Shopware installation that should receive your purchased extensions and updates.",
+      "explanation": "Use these details in ExtensionMesh on the Shopware installation that should receive your available extensions and updates.",
       "registryUrl": "Registry URL",
       "accessToken": "Access token",
       "secretWarning": "Treat this token like a password. Rotating it immediately disables the previous token.",
       "rotate": "Rotate access token",
-      "noEntitlements": "No active digital-product entitlement is available for this customer account."
+      "noEntitlements": "No Extension Mesh access is currently available for this customer account."
     }
   }
 }

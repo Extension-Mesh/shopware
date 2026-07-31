@@ -5,6 +5,10 @@ services:
         autoconfigure: true
         public: false
 
+    _instanceof:
+        ExtensionMesh\Shopware\Service\CustomerProductAccessProvider:
+            tags: ['extension_mesh.customer_product_access_provider']
+
     ExtensionMesh\Shopware\:
         resource: '../../'
         exclude:
@@ -45,6 +49,13 @@ services:
         calls:
             - [setContainer, ['@service_container']]
 
+    ExtensionMesh\Shopware\Storefront\AccountLicenseController:
+        public: true
+        arguments:
+            $pageLoader: '@Shopware\Storefront\Page\GenericPageLoader'
+        calls:
+            - [setContainer, ['@service_container']]
+
     ExtensionMesh\Shopware\Storefront\StoreApiAccessController:
         public: true
 
@@ -64,6 +75,11 @@ services:
     ExtensionMesh\Shopware\Service\AccessTokenService:
         arguments:
             $appSecret: '%kernel.secret%'
+
+    ExtensionMesh\Shopware\Service\CustomerProductAccessResolver:
+        arguments:
+            $products: '@product.repository'
+            $providers: !tagged_iterator extension_mesh.customer_product_access_provider
 
     ExtensionMesh\Shopware\Service\ExtensionInstaller:
         arguments:
