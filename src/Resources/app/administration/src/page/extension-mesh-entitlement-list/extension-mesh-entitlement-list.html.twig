@@ -1,0 +1,160 @@
+<sw-page class="extension-mesh-entitlement-list">
+    <template #smart-bar-header>
+        <h2>
+            {{ $t('extension-mesh.entitlements.title') }}
+            <span
+                v-if="!isLoading"
+                class="sw-page__smart-bar-amount"
+            >
+                ({{ total }})
+            </span>
+        </h2>
+    </template>
+
+    <template #smart-bar-actions>
+        <mt-button
+            variant="primary"
+            :disabled="isLoading"
+            @click="$router.push({ name: 'extension.mesh.entitlement.create' })"
+        >
+            {{ $t('extension-mesh.entitlements.create') }}
+        </mt-button>
+    </template>
+
+    <template #content>
+        <div class="extension-mesh-entitlement-list__content">
+            <mt-empty-state
+                v-if="!isLoading && !total"
+                :centered="true"
+                :icon="$route.meta.$module.icon"
+                :headline="$t('extension-mesh.entitlements.empty')"
+                :description="$t('extension-mesh.entitlements.explanation')"
+            />
+
+            <sw-data-grid
+                v-else
+                identifier="extension-mesh-entitlement-list"
+                :is-loading="isLoading"
+                :data-source="entitlements"
+                :columns="columns"
+                :full-page="true"
+                :skeleton-item-amount="limit"
+                :allow-inline-edit="false"
+                :allow-column-edit="true"
+                :show-settings="true"
+                :show-selection="false"
+            >
+                <template #column-customerName="{ item }">
+                    <router-link
+                        :to="{ name: 'extension.mesh.entitlement.detail', params: { id: item.id } }"
+                    >
+                        {{ item.customerName || item.customerEmail }}
+                    </router-link>
+                    <small>{{ item.customerNumber }} · {{ item.customerEmail }}</small>
+                </template>
+
+                <template #column-productNumber="{ item }">
+                    <router-link :to="{ name: 'sw.product.detail', params: { id: item.productId } }">
+                        {{ item.productNumber }}
+                    </router-link>
+                </template>
+
+                <template #column-salesChannelName="{ item }">
+                    {{ item.salesChannelName }}
+                </template>
+
+                <template #column-orderNumber="{ item }">
+                    <router-link
+                        v-if="item.orderId"
+                        :to="{ name: 'sw.order.detail', params: { id: item.orderId } }"
+                    >
+                        {{ item.orderNumber }}
+                    </router-link>
+                    <span v-else>—</span>
+                </template>
+
+                <template #column-enabled="{ item }">
+                    <sw-label
+                        size="small"
+                        appearance="pill"
+                        :variant="item.enabled && !item.expired ? 'success' : 'neutral'"
+                    >
+                        {{ statusLabel(item) }}
+                    </sw-label>
+                </template>
+
+                <template #column-validUntil="{ item }">
+                    {{ item.validUntil
+                        ? formatDate(item.validUntil)
+                        : $t('extension-mesh.entitlements.noExpiration') }}
+                </template>
+
+                <template #actions="{ item }">
+                    <sw-context-menu-item
+                        :router-link="{
+                            name: 'extension.mesh.entitlement.detail',
+                            params: { id: item.id },
+                        }"
+                    >
+                        {{ $t('global.default.edit') }}
+                    </sw-context-menu-item>
+                    <sw-context-menu-item
+                        variant="danger"
+                        :disabled="isLoading"
+                        @click="confirmDelete(item.id)"
+                    >
+                        {{ $t('global.default.delete') }}
+                    </sw-context-menu-item>
+                </template>
+
+                <template #pagination>
+                    <sw-pagination
+                        :page="page"
+                        :limit="limit"
+                        :total="total"
+                        :steps="[10, 25, 50]"
+                        @page-change="onPageChange"
+                    />
+                </template>
+            </sw-data-grid>
+        </div>
+    </template>
+
+    <template #sidebar>
+        <sw-sidebar>
+            <sw-sidebar-item
+                icon="regular-undo"
+                :title="$t('extension-mesh.entitlements.refresh')"
+                @click="loadEntitlements"
+            />
+        </sw-sidebar>
+    </template>
+
+    <sw-modal
+        v-if="deleteId"
+        :title="$t('extension-mesh.entitlements.deleteTitle')"
+        variant="small"
+        @modal-close="cancelDelete"
+    >
+        {{ $t('extension-mesh.entitlements.deleteConfirm') }}
+
+        <template #modal-footer>
+            <mt-button
+                variant="secondary"
+                size="small"
+                :disabled="isLoading"
+                @click="cancelDelete"
+            >
+                {{ $t('global.default.cancel') }}
+            </mt-button>
+            <mt-button
+                variant="critical"
+                size="small"
+                :is-loading="isLoading"
+                @click="deleteEntitlement"
+            >
+                {{ $t('global.default.delete') }}
+            </mt-button>
+        </template>
+    </sw-modal>
+</sw-page>

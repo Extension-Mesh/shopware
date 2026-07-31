@@ -1,0 +1,104 @@
+<mt-card
+    :title="$t('extension-mesh.entitlements.generalCard')"
+    position-identifier="extension-mesh-entitlement-general"
+>
+    <sw-container
+        columns="1fr 1fr"
+        gap="0 32px"
+    >
+        <sw-entity-single-select
+            v-model:value="form.customerId"
+            entity="customer"
+            label-property="customerNumber"
+            :criteria="customerCriteria"
+            :label="$t('extension-mesh.entitlements.customer')"
+            :placeholder="$t('extension-mesh.entitlements.customerPlaceholder')"
+            :disabled="disabled"
+            show-clearable-button
+            required
+        >
+            <template #selection-label-property="{ item }">
+                {{ customerName(item) }} ({{ item.customerNumber }})
+            </template>
+            <template #result-label-property="{ item }">
+                {{ customerName(item) }}
+            </template>
+            <template #result-description-property="{ item }">
+                {{ item.customerNumber }} · {{ item.email }}
+            </template>
+        </sw-entity-single-select>
+
+        <sw-entity-single-select
+            v-model:value="form.salesChannelId"
+            entity="sales_channel"
+            :label="$t('extension-mesh.entitlements.salesChannel')"
+            :placeholder="$t('extension-mesh.entitlements.salesChannelPlaceholder')"
+            :disabled="disabled"
+            show-clearable-button
+            required
+        />
+
+        <sw-entity-single-select
+            v-model:value="form.productId"
+            entity="product"
+            label-property="name"
+            :criteria="productCriteria"
+            :context="productContext"
+            :display-variants="true"
+            advanced-selection-component="sw-advanced-selection-product"
+            :advanced-selection-parameters="productAdvancedSelectionParameters"
+            :label="$t('extension-mesh.entitlements.product')"
+            :placeholder="$t('extension-mesh.entitlements.productPlaceholder')"
+            :disabled="disabled || isLoadingOptions"
+            show-clearable-button
+            required
+        >
+            <template #selection-label-property="{ item }">
+                <sw-product-variant-info :variations="item.variation">
+                    {{ item.translated.name || item.name }}
+                </sw-product-variant-info>
+            </template>
+            <template #result-description-property="{ item }">
+                {{ item.productNumber }}
+            </template>
+        </sw-entity-single-select>
+
+        <sw-entity-single-select
+            v-model:value="form.orderId"
+            entity="order"
+            label-property="orderNumber"
+            :criteria="orderCriteria"
+            :label="$t('extension-mesh.entitlements.order')"
+            :placeholder="$t('extension-mesh.entitlements.orderPlaceholder')"
+            :help-text="$t('extension-mesh.entitlements.orderHelp')"
+            :disabled="orderSelectionDisabled"
+            show-clearable-button
+        >
+            <template #selection-label-property="{ item }">
+                {{ item.orderNumber }} · {{ orderCustomerName(item) }}
+            </template>
+            <template #result-label-property="{ item }">
+                {{ item.orderNumber }}
+            </template>
+            <template #result-description-property="{ item }">
+                {{ orderCustomerName(item) }} · {{ formatOrderDate(item.orderDateTime) }}
+            </template>
+        </sw-entity-single-select>
+
+        <mt-datepicker
+            v-model="form.validUntil"
+            date-type="datetime"
+            :label="$t('extension-mesh.entitlements.validUntil')"
+            :placeholder="$t('extension-mesh.entitlements.validUntilPlaceholder')"
+            :help-text="$t('extension-mesh.entitlements.validUntilHelp')"
+            :disabled="disabled"
+        />
+
+        <mt-switch
+            v-model="form.enabled"
+            bordered
+            :label="$t('extension-mesh.entitlements.enabledLabel')"
+            :disabled="disabled"
+        />
+    </sw-container>
+</mt-card>

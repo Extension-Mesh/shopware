@@ -3,11 +3,11 @@
   "entryPoints": {
     "extension-mesh": {
       "css": [
-        "/bundles/extensionmesh/administration/assets/extension-mesh-BEGUYDkc.css"
+        "/bundles/extensionmesh/administration/assets/extension-mesh-CY6lzHP7.css"
       ],
       "dynamic": [],
       "js": [
-        "/bundles/extensionmesh/administration/assets/extension-mesh-DFTAkTni.js"
+        "/bundles/extensionmesh/administration/assets/extension-mesh--oEYlHBF.js"
       ],
       "legacy": false,
       "preload": []

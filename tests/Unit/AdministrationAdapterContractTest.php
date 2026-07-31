@@ -6,33 +6,67 @@ use PHPUnit\Framework\TestCase;
 
 final class AdministrationAdapterContractTest extends TestCase
 {
-    public function testTheAdapterAddsOnlyNestedRoutesToTheExistingExtensionExperience(): void
+    public function testTheAdapterAddsExtensionSourcesAndASeparateEntitlementsModule(): void
     {
         $root = __DIR__ . '/../../src/Resources/app/administration/src';
         $main = \file_get_contents($root . '/main.js');
         $module = \file_get_contents($root . '/module/extension-mesh/index.js');
-        $indexTemplate = \file_get_contents(
-            $root . '/extension/sw-extension-my-extensions-index/sw-extension-my-extensions-index.html.twig'
+        $entitlementModule = \file_get_contents(
+            $root . '/module/extension-mesh-entitlement/index.js'
+        );
+        $administrationTemplate = \file_get_contents(
+            $root . '/page/extension-mesh-administration/'
+            . 'extension-mesh-administration.html.twig'
         );
         self::assertIsString($main);
         self::assertIsString($module);
-        self::assertIsString($indexTemplate);
+        self::assertIsString($entitlementModule);
+        self::assertIsString($administrationTemplate);
 
         self::assertStringContainsString('sw-extension-my-extensions-listing', $main);
-        self::assertStringContainsString('sw-extension-my-extensions-index', $main);
+        self::assertStringNotContainsString('sw-extension-my-extensions-index', $main);
         self::assertStringContainsString('sw-self-maintained-extension-card', $main);
-        self::assertStringContainsString('routeMiddleware', $module);
-        self::assertStringContainsString('sw.extension.my-extensions.registries', $module);
-        self::assertStringContainsString('sw.extension.my-extensions.repositories', $module);
-        self::assertStringNotContainsString('navigation:', $module);
+        self::assertStringNotContainsString('routeMiddleware', $module);
+        self::assertStringContainsString("component: 'extension-mesh-administration'", $module);
+        self::assertStringContainsString("component: 'extension-mesh-registries'", $module);
+        self::assertStringContainsString("component: 'extension-mesh-repositories'", $module);
+        self::assertStringContainsString("parent: 'sw-extension'", $module);
+        self::assertStringContainsString('navigation:', $module);
+        self::assertStringContainsString(
+            "import './module/extension-mesh-entitlement'",
+            $main
+        );
+        self::assertStringContainsString(
+            "Module.register('extension-mesh-entitlement'",
+            $entitlementModule
+        );
+        self::assertStringContainsString("parent: 'sw-order'", $entitlementModule);
+        self::assertStringContainsString(
+            "path: 'extension.mesh.entitlement.index'",
+            $entitlementModule
+        );
+        self::assertStringContainsString(
+            "component: 'extension-mesh-entitlement-create'",
+            $entitlementModule
+        );
+        self::assertStringContainsString(
+            "component: 'extension-mesh-entitlement-detail'",
+            $entitlementModule
+        );
         $listing = \file_get_contents(
             $root . '/extension/sw-extension-my-extensions-listing/index.js'
         );
         self::assertIsString($listing);
         self::assertStringContainsString('extensionMesh.owned', $listing);
-        self::assertStringContainsString('extension-mesh.tabs.registries', $indexTemplate);
-        self::assertStringContainsString('extension-mesh.tabs.repositories', $indexTemplate);
-        self::assertStringNotContainsString('sw-modal', $indexTemplate);
+        self::assertStringContainsString(
+            'extension.mesh.administration.index.registries',
+            $administrationTemplate
+        );
+        self::assertStringContainsString(
+            'extension.mesh.administration.index.repositories',
+            $administrationTemplate
+        );
+        self::assertStringContainsString('<router-view', $administrationTemplate);
         $repositories = \file_get_contents(
             $root . '/page/extension-mesh-repositories/extension-mesh-repositories.html.twig'
         );
@@ -72,6 +106,79 @@ final class AdministrationAdapterContractTest extends TestCase
             'startGithubDevice',
             $repositoryComponent
         );
+        $entitlementList = \file_get_contents(
+            $root . '/page/extension-mesh-entitlement-list/'
+            . 'extension-mesh-entitlement-list.html.twig'
+        );
+        $entitlementListComponent = \file_get_contents(
+            $root . '/page/extension-mesh-entitlement-list/index.js'
+        );
+        $entitlementCreate = \file_get_contents(
+            $root . '/page/extension-mesh-entitlement-create/'
+            . 'extension-mesh-entitlement-create.html.twig'
+        );
+        $entitlementCreateComponent = \file_get_contents(
+            $root . '/page/extension-mesh-entitlement-create/index.js'
+        );
+        $entitlementDetail = \file_get_contents(
+            $root . '/page/extension-mesh-entitlement-detail/'
+            . 'extension-mesh-entitlement-detail.html.twig'
+        );
+        $entitlementDetailComponent = \file_get_contents(
+            $root . '/page/extension-mesh-entitlement-detail/index.js'
+        );
+        $entitlementForm = \file_get_contents(
+            $root . '/component/extension-mesh-entitlement-form/'
+            . 'extension-mesh-entitlement-form.html.twig'
+        );
+        $entitlementFormComponent = \file_get_contents(
+            $root . '/component/extension-mesh-entitlement-form/index.js'
+        );
+        $entitlementListStyles = \file_get_contents(
+            $root . '/page/extension-mesh-entitlement-list/'
+            . 'extension-mesh-entitlement-list.scss'
+        );
+        self::assertIsString($entitlementList);
+        self::assertIsString($entitlementListComponent);
+        self::assertIsString($entitlementCreate);
+        self::assertIsString($entitlementCreateComponent);
+        self::assertIsString($entitlementDetail);
+        self::assertIsString($entitlementDetailComponent);
+        self::assertIsString($entitlementForm);
+        self::assertIsString($entitlementFormComponent);
+        self::assertIsString($entitlementListStyles);
+        self::assertStringContainsString('<sw-page', $entitlementList);
+        self::assertStringContainsString('sw-data-grid', $entitlementList);
+        self::assertStringContainsString(':full-page="true"', $entitlementList);
+        self::assertStringContainsString('deleteEntitlement', $entitlementListComponent);
+        self::assertStringContainsString('<sw-page', $entitlementCreate);
+        self::assertStringContainsString('<sw-card-view', $entitlementCreate);
+        self::assertStringContainsString('<sw-button-process', $entitlementCreate);
+        self::assertStringContainsString('size="default"', $entitlementCreate);
+        self::assertStringNotContainsString('<sw-modal', $entitlementCreate);
+        self::assertStringContainsString('createEntitlement', $entitlementCreateComponent);
+        self::assertStringContainsString('<sw-page', $entitlementDetail);
+        self::assertStringContainsString('<sw-card-view', $entitlementDetail);
+        self::assertStringContainsString('<sw-button-process', $entitlementDetail);
+        self::assertStringContainsString('size="default"', $entitlementDetail);
+        self::assertStringNotContainsString('<sw-modal', $entitlementDetail);
+        self::assertStringContainsString('getEntitlement', $entitlementDetailComponent);
+        self::assertStringContainsString('updateEntitlement', $entitlementDetailComponent);
+        self::assertStringContainsString('entity="customer"', $entitlementForm);
+        self::assertStringContainsString('entity="product"', $entitlementForm);
+        self::assertStringContainsString('entity="sales_channel"', $entitlementForm);
+        self::assertStringContainsString('entity="order"', $entitlementForm);
+        self::assertStringContainsString('<sw-container', $entitlementForm);
+        self::assertStringContainsString('columns="1fr 1fr"', $entitlementForm);
+        self::assertStringContainsString('label-property="customerNumber"', $entitlementForm);
+        self::assertStringContainsString('<sw-product-variant-info', $entitlementForm);
+        self::assertStringContainsString(':criteria="productCriteria"', $entitlementForm);
+        self::assertStringContainsString(':criteria="orderCriteria"', $entitlementForm);
+        self::assertStringContainsString('<mt-datepicker', $entitlementForm);
+        self::assertStringContainsString('Criteria.equalsAny', $entitlementFormComponent);
+        self::assertStringContainsString("Criteria.equals('childCount', 0)", $entitlementFormComponent);
+        self::assertStringContainsString('position: absolute', $entitlementListStyles);
+        self::assertStringContainsString(':has(.mt-empty-state)', $entitlementListStyles);
         $downloadForm = \file_get_contents(
             $root . '/extension/sw-product-download-form/sw-product-download-form.html.twig'
         );

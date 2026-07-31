@@ -49,6 +49,16 @@ final class ExtensionMeshException extends \RuntimeException
         return new self('Registry access denied: ' . $message);
     }
 
+    public static function invalidEntitlement(string $message): self
+    {
+        return new self('Invalid entitlement: ' . $message);
+    }
+
+    public static function entitlementNotFound(string $id): self
+    {
+        return new self(\sprintf('Entitlement "%s" was not found.', $id));
+    }
+
     public static function invalidRepository(string $message): self
     {
         return new self('Invalid repository connection: ' . $message);

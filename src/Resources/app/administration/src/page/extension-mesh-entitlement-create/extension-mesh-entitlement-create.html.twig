@@ -1,0 +1,39 @@
+<sw-page class="extension-mesh-entitlement-create">
+    <template #smart-bar-header>
+        <h2>{{ $t('extension-mesh.entitlements.createTitle') }}</h2>
+    </template>
+
+    <template #smart-bar-actions>
+        <span>
+            <mt-button
+                class="extension-mesh-entitlement-create__cancel-action"
+                variant="secondary"
+                size="default"
+                :disabled="isLoading"
+                @click.prevent="$router.push({ name: 'extension.mesh.entitlement.index' })"
+            >
+                {{ $t('global.default.cancel') }}
+            </mt-button>
+            <sw-button-process
+                class="extension-mesh-entitlement-create__save-action"
+                variant="primary"
+                :is-loading="isLoading"
+                :disabled="!canSave"
+                :process-success="isSaveSuccessful"
+                @update:process-success="saveFinish"
+                @click.prevent="saveEntitlement"
+            >
+                {{ $t('global.default.save') }}
+            </sw-button-process>
+        </span>
+    </template>
+
+    <template #content>
+        <sw-card-view>
+            <extension-mesh-entitlement-form
+                :form="form"
+                :disabled="isLoading"
+            />
+        </sw-card-view>
+    </template>
+</sw-page>

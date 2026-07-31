@@ -27,6 +27,9 @@ services:
     ExtensionMesh\Shopware\Api\RepositoryController:
         public: true
 
+    ExtensionMesh\Shopware\Api\EntitlementController:
+        public: true
+
     ExtensionMesh\Shopware\Api\ProductDownloadController:
         public: true
         arguments:

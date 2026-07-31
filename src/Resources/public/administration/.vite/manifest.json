@@ -1,11 +1,11 @@
 {
   "main.js": {
-    "file": "assets/extension-mesh-DFTAkTni.js",
+    "file": "assets/extension-mesh--oEYlHBF.js",
     "name": "extension-mesh",
     "src": "main.js",
     "isEntry": true,
     "css": [
-      "assets/extension-mesh-BEGUYDkc.css"
+      "assets/extension-mesh-CY6lzHP7.css"
     ]
   }
 }

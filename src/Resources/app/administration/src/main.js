@@ -1,6 +1,6 @@
 import './service/extension-mesh-api.service';
 import './module/extension-mesh';
-import './extension/sw-extension-my-extensions-index';
+import './module/extension-mesh-entitlement';
 import './extension/sw-extension-my-extensions-listing';
 import './extension/sw-self-maintained-extension-card';
 import './extension/sw-extension-card-base';

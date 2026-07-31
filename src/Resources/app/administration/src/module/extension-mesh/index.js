@@ -1,26 +1,8 @@
+import '../../page/extension-mesh-administration';
 import '../../page/extension-mesh-registries';
 import '../../page/extension-mesh-repositories';
 
 const { Module } = Shopware;
-
-const childRoutes = [
-    {
-        component: 'extension-mesh-registries',
-        name: 'sw.extension.my-extensions.registries',
-        path: 'registries',
-        meta: {
-            privilege: 'system.plugin_maintain',
-        },
-    },
-    {
-        component: 'extension-mesh-repositories',
-        name: 'sw.extension.my-extensions.repositories',
-        path: 'repositories',
-        meta: {
-            privilege: 'system.plugin_maintain',
-        },
-    },
-];
 
 Module.register('extension-mesh-administration', {
     type: 'plugin',
@@ -31,17 +13,44 @@ Module.register('extension-mesh-administration', {
     targetVersion: '1.0.0',
     color: '#189eff',
     icon: 'regular-plug',
-    routes: {},
 
-    routeMiddleware(next, currentRoute) {
-        if (currentRoute.name === 'sw.extension.my-extensions') {
-            childRoutes.forEach((route) => {
-                if (!currentRoute.children.some((child) => child.name === route.name)) {
-                    currentRoute.children.push(route);
-                }
-            });
-        }
-
-        next(currentRoute);
+    routes: {
+        index: {
+            component: 'extension-mesh-administration',
+            path: 'index',
+            redirect: {
+                name: 'extension.mesh.administration.index.registries',
+            },
+            meta: {
+                privilege: 'system.plugin_maintain',
+            },
+            children: {
+                registries: {
+                    component: 'extension-mesh-registries',
+                    path: 'registries',
+                    meta: {
+                        privilege: 'system.plugin_maintain',
+                    },
+                },
+                repositories: {
+                    component: 'extension-mesh-repositories',
+                    path: 'repositories',
+                    meta: {
+                        privilege: 'system.plugin_maintain',
+                    },
+                },
+            },
+        },
     },
+
+    navigation: [
+        {
+            id: 'extension-mesh-administration',
+            path: 'extension.mesh.administration.index.registries',
+            label: 'Extension Mesh',
+            parent: 'sw-extension',
+            position: 20,
+            privilege: 'system.plugin_maintain',
+        },
+    ],
 });

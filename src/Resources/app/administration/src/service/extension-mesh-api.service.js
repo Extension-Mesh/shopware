@@ -56,6 +56,57 @@ class ExtensionMeshApiService extends ApiService {
         );
     }
 
+    getEntitlements(page = 1, limit = 25) {
+        return this.httpClient
+            .get('_action/extension-mesh/entitlements', {
+                params: { page, limit },
+                headers: this.getBasicHeaders(),
+            })
+            .then((response) => response.data);
+    }
+
+    getEntitlement(id) {
+        return this.httpClient
+            .get(`_action/extension-mesh/entitlements/${id}`, {
+                headers: this.getBasicHeaders(),
+            })
+            .then((response) => response.data.data);
+    }
+
+    getEntitlementOptions() {
+        return this.httpClient
+            .get('_action/extension-mesh/entitlements/options', {
+                headers: this.getBasicHeaders(),
+            })
+            .then((response) => response.data.data);
+    }
+
+    createEntitlement(payload) {
+        return this.httpClient
+            .post(
+                '_action/extension-mesh/entitlements',
+                payload,
+                { headers: this.getBasicHeaders() },
+            )
+            .then((response) => response.data.data);
+    }
+
+    updateEntitlement(id, payload) {
+        return this.httpClient
+            .put(
+                `_action/extension-mesh/entitlements/${id}`,
+                payload,
+                { headers: this.getBasicHeaders() },
+            )
+            .then((response) => response.data.data);
+    }
+
+    deleteEntitlement(id) {
+        return this.httpClient.delete(`_action/extension-mesh/entitlements/${id}`, {
+            headers: this.getBasicHeaders(),
+        });
+    }
+
     getPublicationStatus(page = 1, limit = 10, synchronize = true) {
         return this.httpClient
             .get('_action/extension-mesh/publication', {

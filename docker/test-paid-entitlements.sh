@@ -232,6 +232,18 @@ jq -e '.data.enabled == true and .data.source == "manual"' \
     "${temporary_dir}/connect-product.json" >/dev/null \
     || fail 'the manually uploaded product was not connected to Extension Mesh'
 
+expect_status 200 "${temporary_dir}/entitlement-options.json" \
+    "${seller_api}/_action/extension-mesh/entitlements/options" \
+    -H "Authorization: Bearer ${seller_admin_token}"
+jq -e '.data.eligibleProductIds
+    | index("'"${product_id}"'") != null' \
+    "${temporary_dir}/entitlement-options.json" >/dev/null \
+    || fail 'the entitlement selector options did not contain the connected product'
+jq -e '.data.eligibleProductIds
+    | index("'"${normal_product_id}"'") == null' \
+    "${temporary_dir}/entitlement-options.json" >/dev/null \
+    || fail 'the entitlement selector options contained an ineligible product'
+
 expect_status 200 "${temporary_dir}/publication-v1.json" \
     "${seller_api}/_action/extension-mesh/publication?page=999999&limit=100" \
     -H "Authorization: Bearer ${seller_admin_token}"
@@ -299,6 +311,7 @@ registered_context=$(awk 'BEGIN{IGNORECASE=1} /^sw-context-token:/ {gsub("\r", "
 if [ -n "${registered_context}" ]; then
     context_token="${registered_context}"
 fi
+customer_id=$(jq -er '.id' "${temporary_dir}/registration.json")
 
 expect_status 200 "${temporary_dir}/cart.json" \
     -X POST "${seller_storefront}/store-api/checkout/cart/line-item" \
@@ -312,6 +325,7 @@ expect_status 200 "${temporary_dir}/order.json" \
     -H "sw-context-token: ${context_token}" \
     -H 'Content-Type: application/json' \
     --data '{}'
+order_id=$(jq -er '.id' "${temporary_dir}/order.json")
 transaction_id=$(jq -er '.primaryOrderTransaction.id' "${temporary_dir}/order.json")
 ordered_download_id=$(jq -er '.lineItems[] | select(.productId == "'"${product_id}"'") | .downloads[0].id' \
     "${temporary_dir}/order.json")
@@ -325,6 +339,69 @@ granted=$(curl -fsS "${seller_api}/order-line-item-download/${ordered_download_i
     -H "Authorization: Bearer ${seller_admin_token}" \
     | jq -er '.data.attributes.accessGranted')
 [ "${granted}" = "true" ] || fail 'Shopware did not grant the paid digital-product download'
+
+expect_status 200 "${temporary_dir}/automatic-entitlements.json" \
+    "${seller_api}/_action/extension-mesh/entitlements?page=1&limit=100" \
+    -H "Authorization: Bearer ${seller_admin_token}"
+automatic_entitlement_id=$(jq -er \
+    '.data[] | select(
+        .customerId == "'"${customer_id}"'"
+        and .productId == "'"${product_id}"'"
+        and .orderId == "'"${order_id}"'"
+        and .enabled == true
+        and .expired == false
+        and .validUntil == null
+    ) | .id' \
+    "${temporary_dir}/automatic-entitlements.json")
+[ -n "${automatic_entitlement_id}" ] \
+    || fail 'payment did not issue a persisted order-linked entitlement'
+
+entitlement_payload=$(jq -nc \
+    --arg customerId "${customer_id}" \
+    --arg productId "${product_id}" \
+    --arg salesChannelId "${sales_channel_id}" \
+    '{
+        customerId: $customerId,
+        productId: $productId,
+        salesChannelId: $salesChannelId,
+        orderId: null,
+        enabled: true
+    }')
+expect_status 201 "${temporary_dir}/create-entitlement.json" \
+    -X POST "${seller_api}/_action/extension-mesh/entitlements" \
+    -H "Authorization: Bearer ${seller_admin_token}" \
+    -H 'Content-Type: application/json' \
+    --data "${entitlement_payload}"
+entitlement_id=$(jq -er '.data.id' "${temporary_dir}/create-entitlement.json")
+jq -e '.data.orderId == null
+    and .data.enabled == true
+    and .data.expired == false
+    and .data.validUntil == null' \
+    "${temporary_dir}/create-entitlement.json" >/dev/null \
+    || fail 'the standalone entitlement was not created without an order'
+
+additional_entitlement_payload=$(printf '%s' "${entitlement_payload}" \
+    | jq '.enabled = false')
+expect_status 201 "${temporary_dir}/create-additional-entitlement.json" \
+    -X POST "${seller_api}/_action/extension-mesh/entitlements" \
+    -H "Authorization: Bearer ${seller_admin_token}" \
+    -H 'Content-Type: application/json' \
+    --data "${additional_entitlement_payload}"
+additional_entitlement_id=$(jq -er '.data.id' \
+    "${temporary_dir}/create-additional-entitlement.json")
+[ "${additional_entitlement_id}" != "${entitlement_id}" ] \
+    || fail 'parallel licenses for the same customer and product were collapsed'
+
+linked_entitlement_payload=$(printf '%s' "${entitlement_payload}" \
+    | jq --arg orderId "${order_id}" '.orderId = $orderId')
+expect_status 200 "${temporary_dir}/link-entitlement-order.json" \
+    -X PUT "${seller_api}/_action/extension-mesh/entitlements/${entitlement_id}" \
+    -H "Authorization: Bearer ${seller_admin_token}" \
+    -H 'Content-Type: application/json' \
+    --data "${linked_entitlement_payload}"
+jq -e '.data.orderId == "'"${order_id}"'"' \
+    "${temporary_dir}/link-entitlement-order.json" >/dev/null \
+    || fail 'the optional order was not linked to the entitlement'
 
 expect_status 200 "${temporary_dir}/access.json" \
     "${seller_storefront}/store-api/extension-mesh/access" \
@@ -450,9 +527,53 @@ expect_status 200 "${temporary_dir}/refunded-registry.json" \
     "${seller_storefront}/extension-mesh/v1/registry" \
     -H "Authorization: Bearer ${rotated_token}"
 jq -e '.extensions | length == 0' "${temporary_dir}/refunded-registry.json" >/dev/null \
-    || fail 'a fully refunded order retained its entitlement'
+    || fail 'a refund did not disable the order-linked entitlements'
 expect_status 401 "${temporary_dir}/refunded-artifact.json" \
     "${artifact_url}" \
     -H "Authorization: Bearer ${rotated_token}"
+expect_status 200 "${temporary_dir}/refunded-entitlements.json" \
+    "${seller_api}/_action/extension-mesh/entitlements?page=1&limit=100" \
+    -H "Authorization: Bearer ${seller_admin_token}"
+jq -e '.data[] | select(
+    .id == "'"${automatic_entitlement_id}"'" and .enabled == false
+)' "${temporary_dir}/refunded-entitlements.json" >/dev/null \
+    || fail 'the refund did not disable the automatically issued entitlement'
+jq -e '.data[] | select(
+    .id == "'"${entitlement_id}"'" and .enabled == false
+)' "${temporary_dir}/refunded-entitlements.json" >/dev/null \
+    || fail 'the refund did not disable a manually linked entitlement'
 
-echo "Paid entitlement test passed: upload-only publishing, checkout, grant, authenticated update, rotation and refund revocation."
+disabled_entitlement_payload=$(printf '%s' "${linked_entitlement_payload}" \
+    | jq '.enabled = false')
+expect_status 200 "${temporary_dir}/re-enable-entitlement.json" \
+    -X PUT "${seller_api}/_action/extension-mesh/entitlements/${entitlement_id}" \
+    -H "Authorization: Bearer ${seller_admin_token}" \
+    -H 'Content-Type: application/json' \
+    --data "${linked_entitlement_payload}"
+expect_status 200 "${temporary_dir}/seller-override-registry.json" \
+    "${seller_storefront}/extension-mesh/v1/registry" \
+    -H "Authorization: Bearer ${rotated_token}"
+jq -e '.extensions | length == 1' "${temporary_dir}/seller-override-registry.json" >/dev/null \
+    || fail 'the seller could not re-enable a refunded order entitlement'
+expect_status 200 "${temporary_dir}/disable-entitlement.json" \
+    -X PUT "${seller_api}/_action/extension-mesh/entitlements/${entitlement_id}" \
+    -H "Authorization: Bearer ${seller_admin_token}" \
+    -H 'Content-Type: application/json' \
+    --data "${disabled_entitlement_payload}"
+expect_status 200 "${temporary_dir}/disabled-registry.json" \
+    "${seller_storefront}/extension-mesh/v1/registry" \
+    -H "Authorization: Bearer ${rotated_token}"
+jq -e '.extensions | length == 0' "${temporary_dir}/disabled-registry.json" >/dev/null \
+    || fail 'a disabled entitlement still exposed updates'
+
+expect_status 204 "${temporary_dir}/delete-entitlement.json" \
+    -X DELETE "${seller_api}/_action/extension-mesh/entitlements/${entitlement_id}" \
+    -H "Authorization: Bearer ${seller_admin_token}"
+expect_status 204 "${temporary_dir}/delete-additional-entitlement.json" \
+    -X DELETE "${seller_api}/_action/extension-mesh/entitlements/${additional_entitlement_id}" \
+    -H "Authorization: Bearer ${seller_admin_token}"
+expect_status 204 "${temporary_dir}/delete-automatic-entitlement.json" \
+    -X DELETE "${seller_api}/_action/extension-mesh/entitlements/${automatic_entitlement_id}" \
+    -H "Authorization: Bearer ${seller_admin_token}"
+
+echo "Paid entitlement test passed: perpetual-by-default automatic issuance, parallel standalone grants, optional order linkage, authenticated update, rotation, refund revocation and seller override."
