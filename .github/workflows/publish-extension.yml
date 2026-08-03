@@ -67,11 +67,25 @@ jobs:
             if [[ "$previous_version" == "$version" ]]; then
               echo "Composer version remains ${version}; release publication is skipped."
             else
-              if git show-ref --verify --quiet "refs/tags/${tag}" \
-                || gh release view "$tag" >/dev/null 2>&1; then
-                echo "Release ${tag} already exists and is immutable." >&2
-                echo "Increment composer.json version before publishing again." >&2
-                exit 1
+              existing_tag_sha=""
+              if git show-ref --verify --quiet "refs/tags/${tag}"; then
+                existing_tag_sha="$(git rev-parse "${tag}^{commit}")"
+              fi
+              existing_release_target="$(
+                gh release view "$tag" \
+                  --json targetCommitish \
+                  --jq '.targetCommitish' 2>/dev/null \
+                  || true
+              )"
+
+              if [[ -n "$existing_tag_sha" || -n "$existing_release_target" ]]; then
+                if [[ "$existing_tag_sha" != "$GITHUB_SHA" \
+                  || "$existing_release_target" != "$GITHUB_SHA" ]]; then
+                  echo "Release ${tag} already belongs to a different source commit." >&2
+                  echo "Increment composer.json version before publishing again." >&2
+                  exit 1
+                fi
+                echo "Release ${tag} already belongs to this commit; verifying it idempotently."
               fi
               publish=true
             fi
