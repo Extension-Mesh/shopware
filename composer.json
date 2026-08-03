@@ -1,7 +1,7 @@
 {
   "name": "extension-mesh/shopware",
   "description": "ExtensionMesh registry integration for Shopware 6 installations",
-  "version": "0.1.0-alpha.4",
+  "version": "0.1.0-beta.1",
   "type": "shopware-platform-plugin",
   "license": "MIT",
   "authors": [
