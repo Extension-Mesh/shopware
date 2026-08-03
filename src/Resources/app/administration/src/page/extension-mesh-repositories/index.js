@@ -1,5 +1,6 @@
 import template from './extension-mesh-repositories.html.twig';
 import './extension-mesh-repositories.scss';
+import { githubFineGrainedTokenUrl } from '../../util/extension-mesh';
 
 const { Component } = Shopware;
 const { Criteria } = Shopware.Data;
@@ -7,7 +8,7 @@ const { Criteria } = Shopware.Data;
 Component.register('extension-mesh-repositories', {
     template,
 
-    inject: ['extensionMeshApiService', 'repositoryFactory'],
+    inject: ['acl', 'extensionMeshApiService', 'repositoryFactory'],
 
     data() {
         return {
@@ -32,6 +33,7 @@ Component.register('extension-mesh-repositories', {
             productId: null,
             credentialRepositoryId: null,
             credentialToken: '',
+            unlinkRepositoryId: null,
             repositoryPollTimer: null,
         };
     },
@@ -110,18 +112,7 @@ Component.register('extension-mesh-repositories', {
         },
 
         githubTokenUrl() {
-            const parameters = new URLSearchParams({
-                name: 'ExtensionMesh',
-                description: 'Read-only repository access for ExtensionMesh synchronization',
-                expires_in: '90',
-                contents: 'read',
-            });
-            const owner = this.repositoryName.trim().match(/^([A-Za-z0-9_.-]{1,100})\//)?.[1];
-            if (owner) {
-                parameters.set('target_name', owner);
-            }
-
-            return `https://github.com/settings/personal-access-tokens/new?${parameters.toString()}`;
+            return githubFineGrainedTokenUrl(this.repositoryName);
         },
 
         isGithubProvider() {
@@ -130,6 +121,18 @@ Component.register('extension-mesh-repositories', {
 
         showApiBaseUrl() {
             return !this.isGithubProvider || this.showCustomApiBaseUrl;
+        },
+
+        canCreate() {
+            return this.acl.can('extension_mesh_repository_connection:create');
+        },
+
+        canUpdate() {
+            return this.acl.can('extension_mesh_repository_connection:update');
+        },
+
+        canDelete() {
+            return this.acl.can('extension_mesh_repository_connection:delete');
         },
     },
 
@@ -147,7 +150,6 @@ Component.register('extension-mesh-repositories', {
             this.error = null;
 
             try {
-                await this.extensionMeshApiService.synchronizePublications();
                 const [repositories, publication, providers] = await Promise.all([
                     this.fetchRepositoryPage(),
                     this.fetchPublicationPage(),
@@ -325,9 +327,21 @@ Component.register('extension-mesh-repositories', {
             });
         },
 
-        async unlinkRepository(id) {
+        requestUnlinkRepository(id) {
+            this.unlinkRepositoryId = id;
+        },
+
+        cancelUnlinkRepository() {
+            this.unlinkRepositoryId = null;
+        },
+
+        async unlinkRepository() {
+            const id = this.unlinkRepositoryId;
+            if (!id) return;
+
             await this.withLoading(async () => {
                 await this.extensionMeshApiService.unlinkSellerRepository(id);
+                this.cancelUnlinkRepository();
                 const result = await this.fetchRepositoryPage();
                 this.applyRepositoryPage(result);
             });

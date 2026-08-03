@@ -6,15 +6,29 @@ on:
       - main
     paths:
       - .github/workflows/dockware-integration.yml
+      - composer.json
+      - composer.lock
       - compose.yaml
       - Makefile
       - docker/**
+      - src/**
+      - tests/**
+  pull_request:
+    paths:
+      - .github/workflows/dockware-integration.yml
+      - composer.json
+      - composer.lock
+      - compose.yaml
+      - Makefile
+      - docker/**
+      - src/**
+      - tests/**
   workflow_dispatch:
     inputs:
       dockware_image:
         description: Dockware image to test
         required: false
-        default: dockware/shopware:6.7.12.1
+        default: dockware/shopware:6.7.12.2
         type: string
   schedule:
     - cron: "17 2 * * *"
@@ -23,11 +37,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: dockware-integration
-  cancel-in-progress: false
+  group: dockware-integration-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
-  DOCKWARE_IMAGE: ${{ inputs.dockware_image || 'dockware/shopware:6.7.12.1' }}
+  DOCKWARE_IMAGE: ${{ inputs.dockware_image || 'dockware/shopware:6.7.12.2' }}
 
 jobs:
   integration:

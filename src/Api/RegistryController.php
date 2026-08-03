@@ -17,7 +17,6 @@ use Symfony\Component\Routing\Attribute\Route;
 
 #[Route(defaults: [
     PlatformRequest::ATTRIBUTE_ROUTE_SCOPE => [ApiRouteScope::ID],
-    PlatformRequest::ATTRIBUTE_ACL => ['system.plugin_maintain'],
 ])]
 final class RegistryController extends AbstractController
 {
@@ -32,7 +31,8 @@ final class RegistryController extends AbstractController
     #[Route(
         path: '/api/_action/extension-mesh/registries',
         name: 'api.action.extension_mesh.registries.add',
-        methods: [Request::METHOD_POST]
+        methods: [Request::METHOD_POST],
+        defaults: [PlatformRequest::ATTRIBUTE_ACL => ['extension_mesh_registry_source:create']]
     )]
     public function add(Request $request, Context $context): JsonResponse
     {
@@ -60,7 +60,8 @@ final class RegistryController extends AbstractController
         path: '/api/_action/extension-mesh/registries/{id}/credential',
         name: 'api.action.extension_mesh.registries.credential',
         requirements: ['id' => '[0-9a-f]{32}'],
-        methods: [Request::METHOD_PUT]
+        methods: [Request::METHOD_PUT],
+        defaults: [PlatformRequest::ATTRIBUTE_ACL => ['extension_mesh_registry_source:update']]
     )]
     public function credential(string $id, Request $request, Context $context): Response
     {
@@ -81,7 +82,8 @@ final class RegistryController extends AbstractController
     #[Route(
         path: '/api/_action/extension-mesh/registries/{id}',
         name: 'api.action.extension_mesh.registries.delete',
-        methods: [Request::METHOD_DELETE]
+        methods: [Request::METHOD_DELETE],
+        defaults: [PlatformRequest::ATTRIBUTE_ACL => ['extension_mesh_registry_source:delete']]
     )]
     public function delete(string $id, Context $context): Response
     {
@@ -97,7 +99,8 @@ final class RegistryController extends AbstractController
     #[Route(
         path: '/api/_action/extension-mesh/refresh',
         name: 'api.action.extension_mesh.refresh',
-        methods: [Request::METHOD_POST]
+        methods: [Request::METHOD_POST],
+        defaults: [PlatformRequest::ATTRIBUTE_ACL => ['extension_mesh_registry_source:update']]
     )]
     public function refresh(Context $context): JsonResponse
     {
@@ -109,7 +112,8 @@ final class RegistryController extends AbstractController
     #[Route(
         path: '/api/_action/extension-mesh/extensions',
         name: 'api.action.extension_mesh.extensions',
-        methods: [Request::METHOD_GET]
+        methods: [Request::METHOD_GET],
+        defaults: [PlatformRequest::ATTRIBUTE_ACL => ['extension_mesh_registry_source:read']]
     )]
     public function extensions(Request $request, Context $context): JsonResponse
     {
@@ -127,7 +131,11 @@ final class RegistryController extends AbstractController
             'registryId' => '[0-9a-f]{32}',
             'technicalName' => '[A-Za-z][A-Za-z0-9]*',
         ],
-        methods: [Request::METHOD_POST]
+        methods: [Request::METHOD_POST],
+        defaults: [PlatformRequest::ATTRIBUTE_ACL => [
+            'extension_mesh_registry_source:read',
+            'system.plugin_maintain',
+        ]]
     )]
     public function download(string $registryId, string $technicalName, Context $context): Response
     {

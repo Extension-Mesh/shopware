@@ -16,6 +16,8 @@ final class AccessTokenEntity extends Entity
     protected ?string $label = null;
     protected ?\DateTimeInterface $lastUsedAt = null;
     protected ?\DateTimeInterface $revokedAt = null;
+    protected \DateTimeInterface $expiresAt;
+    protected ?bool $activeSlot = true;
     protected ?CustomerEntity $customer = null;
     protected ?SalesChannelEntity $salesChannel = null;
 
@@ -67,6 +69,26 @@ final class AccessTokenEntity extends Entity
     public function setRevokedAt(?\DateTimeInterface $value): void
     {
         $this->revokedAt = $value;
+    }
+
+    public function getExpiresAt(): \DateTimeInterface
+    {
+        return $this->expiresAt;
+    }
+
+    public function setExpiresAt(\DateTimeInterface $value): void
+    {
+        $this->expiresAt = $value;
+    }
+
+    public function getActiveSlot(): ?bool
+    {
+        return $this->activeSlot;
+    }
+
+    public function setActiveSlot(?bool $value): void
+    {
+        $this->activeSlot = $value;
     }
 
     public function getCustomer(): ?CustomerEntity

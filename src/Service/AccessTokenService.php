@@ -3,7 +3,6 @@
 namespace ExtensionMesh\Shopware\Service;
 
 use ExtensionMesh\Shopware\Exception\ExtensionMeshException;
-use ExtensionMesh\Shopware\Infrastructure\Persistence\AccessTokenRepository;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Context;
 
@@ -12,7 +11,7 @@ final class AccessTokenService
     private const PREFIX = 'em1';
 
     public function __construct(
-        private readonly AccessTokenRepository $tokens,
+        private readonly AccessTokenStore $tokens,
         private readonly CustomerProductAccessResolver $access,
         private readonly string $appSecret
     ) {
@@ -24,17 +23,20 @@ final class AccessTokenService
             return null;
         }
 
-        $token = $this->tokens->activeForCustomer($customerId, $salesChannelId, $context)
-            ?? $this->tokens->create($customerId, $salesChannelId, $context);
+        $token = $this->tokens->getOrCreateActive($customerId, $salesChannelId, $context);
 
         return $this->encode($token['id']);
     }
 
     public function rotate(string $customerId, string $salesChannelId, Context $context): ?string
     {
-        $this->tokens->revokeForCustomer($customerId, $salesChannelId, $context);
+        if ($this->access->productIds($customerId, $salesChannelId, $context) === []) {
+            $this->tokens->revokeForCustomer($customerId, $salesChannelId, $context);
 
-        return $this->getOrCreate($customerId, $salesChannelId, $context);
+            return null;
+        }
+
+        return $this->encode($this->tokens->rotateActive($customerId, $salesChannelId, $context)['id']);
     }
 
     /**
@@ -69,7 +71,11 @@ final class AccessTokenService
         $id = Uuid::fromBytesToHex($idBytes);
         $token = $this->tokens->activeById($id, $context);
         if ($token === null) {
-            throw ExtensionMeshException::accessDenied('the access token is revoked or unknown.');
+            throw ExtensionMeshException::accessDenied('the access token is expired, revoked or unknown.');
+        }
+        if ($this->access->productIds($token['customerId'], $token['salesChannelId'], $context) === []) {
+            $this->tokens->revokeForCustomer($token['customerId'], $token['salesChannelId'], $context);
+            throw ExtensionMeshException::accessDenied('the access token no longer covers an active entitlement.');
         }
 
         $this->tokens->touch($id, $context);

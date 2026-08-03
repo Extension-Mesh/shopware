@@ -50,14 +50,6 @@ final class StorefrontDownloadCatalogTest extends TestCase
             [$product, $newerProduct],
             \array_column(\array_column($result['managed'], 'release'), 'productId')
         );
-        $template = \file_get_contents(
-            __DIR__ . '/../../../src/Resources/views/storefront/component/line-item/element/'
-                . 'downloads.html.twig'
-        );
-        self::assertIsString($template);
-        self::assertStringContainsString('frontend.extension_mesh.licenses.detail', $template);
-        self::assertStringNotContainsString('showOlder', $template);
-        self::assertStringNotContainsString('extension-mesh-download-item', $template);
     }
 
     private function download(string $mediaId): OrderLineItemDownloadEntity

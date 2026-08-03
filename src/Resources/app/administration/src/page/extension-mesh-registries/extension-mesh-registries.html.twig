@@ -13,7 +13,7 @@
             {{ error }}
         </mt-banner>
 
-        <sw-meteor-card class="extension-mesh-page__card">
+        <sw-meteor-card v-if="canCreate" class="extension-mesh-page__card">
             <div class="extension-mesh-page__header">
                 <h3>{{ $t('extension-mesh.registries.addTitle') }}</h3>
                 <p>{{ $t('extension-mesh.registries.explanation') }}</p>
@@ -55,6 +55,7 @@
                     <p>{{ $t('extension-mesh.registries.connectedHelp') }}</p>
                 </div>
                 <mt-button
+                    v-if="canUpdate"
                     variant="secondary"
                     :disabled="isLoading || !registries.length"
                     @click="refreshRegistries"
@@ -94,6 +95,7 @@
 
                 <div class="extension-mesh-page__item-actions">
                     <mt-button
+                        v-if="canUpdate"
                         variant="secondary"
                         size="small"
                         :disabled="isLoading"
@@ -102,10 +104,11 @@
                         {{ $t('extension-mesh.registries.changeAccess') }}
                     </mt-button>
                     <mt-button
+                        v-if="canDelete"
                         variant="critical"
                         size="small"
                         :disabled="isLoading"
-                        @click="removeRegistry(registry.id)"
+                        @click="requestRemoveRegistry(registry.id)"
                     >
                         {{ $t('global.default.delete') }}
                     </mt-button>
@@ -142,5 +145,22 @@
                 </div>
             </div>
         </sw-meteor-card>
+
+        <sw-modal
+            v-if="registryDeleteId"
+            :title="$t('extension-mesh.registries.deleteTitle')"
+            variant="small"
+            @modal-close="cancelRemoveRegistry"
+        >
+            <p>{{ $t('extension-mesh.registries.deleteConfirm') }}</p>
+            <template #modal-footer>
+                <mt-button variant="secondary" :disabled="isLoading" @click="cancelRemoveRegistry">
+                    {{ $t('global.default.cancel') }}
+                </mt-button>
+                <mt-button variant="critical" :disabled="isLoading" @click="removeRegistry">
+                    {{ $t('global.default.delete') }}
+                </mt-button>
+            </template>
+        </sw-modal>
     </template>
 </div>

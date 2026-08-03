@@ -25,6 +25,8 @@ services:
 
     ExtensionMesh\Shopware\Api\PublisherController:
         public: true
+        arguments:
+            $messageBus: '@messenger.default_bus'
 
     ExtensionMesh\Shopware\Api\RepositoryController:
         public: true
@@ -41,6 +43,43 @@ services:
         public: true
         calls:
             - [setContainer, ['@service_container']]
+
+    extension_mesh.publisher_rate_limiter.storage:
+        class: Symfony\Component\RateLimiter\Storage\CacheStorage
+        arguments: ['@cache.rate_limiter']
+
+    extension_mesh.publisher_rate_limiter.registry:
+        class: Shopware\Core\Framework\RateLimiter\RateLimiterFactory
+        arguments:
+            $config:
+                enabled: true
+                id: extension_mesh_publisher_registry
+                policy: fixed_window
+                limit: 60
+                interval: '1 minute'
+            $storage: '@extension_mesh.publisher_rate_limiter.storage'
+            $systemConfigService: '@Shopware\Core\System\SystemConfig\SystemConfigService'
+            $clock: '@Psr\Clock\ClockInterface'
+            $lockFactory: '@lock.factory'
+
+    extension_mesh.publisher_rate_limiter.artifact:
+        class: Shopware\Core\Framework\RateLimiter\RateLimiterFactory
+        arguments:
+            $config:
+                enabled: true
+                id: extension_mesh_publisher_artifact
+                policy: fixed_window
+                limit: 10
+                interval: '1 minute'
+            $storage: '@extension_mesh.publisher_rate_limiter.storage'
+            $systemConfigService: '@Shopware\Core\System\SystemConfig\SystemConfigService'
+            $clock: '@Psr\Clock\ClockInterface'
+            $lockFactory: '@lock.factory'
+
+    ExtensionMesh\Shopware\Service\PublisherRequestLimiter:
+        arguments:
+            $registryFactory: '@extension_mesh.publisher_rate_limiter.registry'
+            $artifactFactory: '@extension_mesh.publisher_rate_limiter.artifact'
 
     ExtensionMesh\Shopware\Storefront\AccountAccessController:
         public: true
@@ -62,7 +101,6 @@ services:
     ExtensionMesh\Shopware\Infrastructure\Http\NetworkPolicy:
         arguments:
             $allowPrivateNetworks: '%env(bool:EXTENSION_MESH_ALLOW_PRIVATE_NETWORKS)%'
-            $debug: '%kernel.debug%'
 
     ExtensionMesh\Shopware\Infrastructure\Http\SafeHttpClient:
         arguments:
@@ -76,10 +114,27 @@ services:
         arguments:
             $appSecret: '%kernel.secret%'
 
+    ExtensionMesh\Shopware\Service\AccessTokenStore:
+        alias: ExtensionMesh\Shopware\Infrastructure\Persistence\AccessTokenRepository
+
     ExtensionMesh\Shopware\Service\CustomerProductAccessResolver:
         arguments:
             $products: '@product.repository'
             $providers: !tagged_iterator extension_mesh.customer_product_access_provider
+
+    ExtensionMesh\Shopware\Service\OrderEntitlementReconciler:
+        alias: ExtensionMesh\Shopware\Infrastructure\Persistence\EntitlementRepository
+
+    ExtensionMesh\Shopware\Service\EntitlementProductEligibility:
+        alias: ExtensionMesh\Shopware\Infrastructure\Persistence\EntitlementRepository
+
+    ExtensionMesh\Shopware\Service\EntitlementInvariantValidator:
+        arguments:
+            $orders: '@order.repository'
+
+    ExtensionMesh\Shopware\Subscriber\EntitlementWriteValidatorSubscriber:
+        arguments:
+            $entitlements: '@extension_mesh_entitlement.repository'
 
     ExtensionMesh\Shopware\Service\ExtensionInstaller:
         arguments:

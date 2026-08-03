@@ -6,13 +6,8 @@ use ExtensionMesh\Shopware\Exception\ExtensionMeshException;
 
 final class NetworkPolicy
 {
-    private readonly bool $allowPrivateNetworks;
-
-    public function __construct(bool $allowPrivateNetworks, bool $debug = false)
+    public function __construct(private readonly bool $allowPrivateNetworks)
     {
-        // Debug mode is already unsuitable for production and keeps local
-        // Dockware/Docker registries usable when PHP-FPM clears process env.
-        $this->allowPrivateNetworks = $allowPrivateNetworks || $debug;
     }
 
     /**
@@ -20,6 +15,27 @@ final class NetworkPolicy
      * that the HTTP client can pin for this connection.
      */
     public function resolveAllowedIp(string $url): string
+    {
+        $host = $this->assertUrlPolicy($url);
+        $addresses = $this->resolveHost($host);
+        foreach ($addresses as $address) {
+            if (!$this->allowPrivateNetworks && !$this->isPublicIp($address)) {
+                throw ExtensionMeshException::networkTargetRejected($host);
+            }
+        }
+
+        if ($addresses === []) {
+            throw ExtensionMeshException::registryUnavailable(\sprintf('host "%s" could not be resolved.', $host));
+        }
+
+        return $addresses[0];
+    }
+
+    /**
+     * Validates the stable URL properties without resolving or connecting to
+     * the host. This is suitable for validating stored registry metadata.
+     */
+    public function assertUrlPolicy(string $url): string
     {
         $parts = \parse_url($url);
         if ($parts === false || !isset($parts['scheme'], $parts['host'])) {
@@ -40,18 +56,7 @@ final class NetworkPolicy
             throw ExtensionMeshException::networkTargetRejected($host);
         }
 
-        $addresses = $this->resolveHost($host);
-        foreach ($addresses as $address) {
-            if (!$this->allowPrivateNetworks && !$this->isPublicIp($address)) {
-                throw ExtensionMeshException::networkTargetRejected($host);
-            }
-        }
-
-        if ($addresses === []) {
-            throw ExtensionMeshException::registryUnavailable(\sprintf('host "%s" could not be resolved.', $host));
-        }
-
-        return $addresses[0];
+        return $host;
     }
 
     /**

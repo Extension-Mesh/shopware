@@ -20,6 +20,8 @@
       "newAccessToken": "Replacement access token",
       "clearAccessHelp": "Leave empty to switch this registry to anonymous access.",
       "refresh": "Refresh registries",
+      "deleteTitle": "Delete registry",
+      "deleteConfirm": "Delete this registry source? Its extensions will disappear from the available-extension catalog.",
       "unknownError": "The registry request failed."
     },
     "entitlements": {
@@ -136,7 +138,9 @@
       "retry": "Retry",
       "changeToken": "Change token",
       "newToken": "Replacement repository token (optional)",
-      "unlink": "Unlink"
+      "unlink": "Unlink",
+      "unlinkTitle": "Unlink repository",
+      "unlinkConfirm": "Unlink this seller repository? Imported products remain, but automatic release synchronization stops."
     },
     "card": {
       "source": "Registry: {source}"

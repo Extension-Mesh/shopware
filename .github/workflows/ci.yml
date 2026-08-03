@@ -22,15 +22,16 @@ jobs:
         with:
           php-version: "8.2"
           extensions: json, sodium, zip
-          coverage: none
+          coverage: pcov
 
       - name: Install dependencies
-        run: composer install --no-interaction --prefer-dist
+        run: composer install --no-interaction --prefer-dist --no-progress
 
       - name: Validate, test, analyse and audit
         run: |
           composer validate --strict --no-check-version
-          composer test
+          composer test:administration
+          composer coverage
           composer analyse
           composer audit --locked --no-interaction
 

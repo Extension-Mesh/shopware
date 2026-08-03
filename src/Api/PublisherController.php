@@ -2,21 +2,22 @@
 
 namespace ExtensionMesh\Shopware\Api;
 
-use ExtensionMesh\Shopware\Service\PublicationSynchronizer;
-use Shopware\Core\Framework\Context;
+use ExtensionMesh\Shopware\Message\PublicationSyncMessage;
 use Shopware\Core\Framework\Routing\ApiRouteScope;
 use Shopware\Core\PlatformRequest;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Routing\Attribute\Route;
 
 #[Route(defaults: [
     PlatformRequest::ATTRIBUTE_ROUTE_SCOPE => [ApiRouteScope::ID],
-    PlatformRequest::ATTRIBUTE_ACL => ['system.plugin_maintain'],
+    PlatformRequest::ATTRIBUTE_ACL => ['extension_mesh_published_release:update'],
 ])]
 final class PublisherController
 {
-    public function __construct(private readonly PublicationSynchronizer $synchronizer)
+    public function __construct(private readonly MessageBusInterface $messageBus)
     {
     }
 
@@ -25,10 +26,10 @@ final class PublisherController
         name: 'api.action.extension_mesh.publication.synchronize',
         methods: [Request::METHOD_POST]
     )]
-    public function synchronize(Context $context): Response
+    public function synchronize(): JsonResponse
     {
-        $this->synchronizer->synchronize($context);
+        $this->messageBus->dispatch(new PublicationSyncMessage());
 
-        return new Response(status: Response::HTTP_NO_CONTENT);
+        return new JsonResponse(['queued' => true], Response::HTTP_ACCEPTED);
     }
 }

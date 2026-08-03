@@ -1,6 +1,6 @@
 <?php declare(strict_types=1);
 
-namespace ExtensionMesh\Shopware\Test\Unit;
+namespace ExtensionMesh\Shopware\Test\Unit\Core;
 
 use ExtensionMesh\Shopware\Core\Content\AccessToken\AccessTokenCollection;
 use ExtensionMesh\Shopware\Core\Content\AccessToken\AccessTokenDefinition;
@@ -32,7 +32,7 @@ use Shopware\Core\Framework\DataAbstractionLayer\Entity;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityCollection;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 
-final class DalEntityContractTest extends TestCase
+final class EntityDefinitionTest extends TestCase
 {
     /**
      * @param class-string<EntityDefinition> $definitionClass
@@ -40,7 +40,7 @@ final class DalEntityContractTest extends TestCase
      * @param class-string<EntityCollection<covariant Entity>> $collectionClass
      */
     #[DataProvider('definitions')]
-    public function testEachDefinitionHasItsTypedEntityAndCollection(
+    public function testDefinitionUsesItsTypedEntityAndCollection(
         string $definitionClass,
         string $entityClass,
         string $collectionClass

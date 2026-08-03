@@ -64,6 +64,15 @@
   },
   "scripts": {
     "analyse": "phpstan analyse --configuration=phpstan.neon --no-progress --memory-limit=1G",
-    "test": "phpunit -c phpunit.xml.dist"
+    "coverage": [
+      "phpunit -c phpunit.xml.dist --coverage-clover build/coverage.xml",
+      "@php tests/coverage-threshold.php build/coverage.xml 30"
+    ],
+    "test": [
+      "@test:unit",
+      "@test:administration"
+    ],
+    "test:administration": "node --test tests/Administration/*.test.js",
+    "test:unit": "phpunit -c phpunit.xml.dist"
   }
 }

@@ -1,7 +1,7 @@
 /vendor/
-/composer.lock
 /.phpunit.cache/
 /.phpstan-cache/
+/build/
 /.idea/
 /.vscode/
 /.DS_Store

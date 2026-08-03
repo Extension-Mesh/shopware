@@ -20,6 +20,8 @@
       "newAccessToken": "Neues Zugriffstoken",
       "clearAccessHelp": "Leer lassen, um diese Registry auf anonymen Zugriff umzustellen.",
       "refresh": "Quellen aktualisieren",
+      "deleteTitle": "Registry löschen",
+      "deleteConfirm": "Diese Registry-Quelle löschen? Ihre Erweiterungen verschwinden aus dem verfügbaren Erweiterungskatalog.",
       "unknownError": "Die Registry-Anfrage ist fehlgeschlagen."
     },
     "entitlements": {
@@ -136,7 +138,9 @@
       "retry": "Erneut versuchen",
       "changeToken": "Token ändern",
       "newToken": "Neues Repository-Token (optional)",
-      "unlink": "Verknüpfung lösen"
+      "unlink": "Verknüpfung lösen",
+      "unlinkTitle": "Repository trennen",
+      "unlinkConfirm": "Dieses Seller-Repository trennen? Importierte Produkte bleiben erhalten, aber die automatische Release-Synchronisierung endet."
     },
     "card": {
       "source": "Quelle: {source}"

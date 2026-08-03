@@ -33,8 +33,12 @@
       "explanation": "Verwende diese Daten in ExtensionMesh auf der Shopware-Installation, die deine verfügbaren Erweiterungen und Updates erhalten soll.",
       "registryUrl": "Registry-URL",
       "accessToken": "Zugriffstoken",
-      "secretWarning": "Behandle dieses Token wie ein Passwort. Beim Erneuern wird das vorherige Token sofort ungültig.",
+      "reveal": "Zugriffstoken anzeigen",
+      "secretWarning": "Behandle dieses Token wie ein Passwort. Aktive Clients halten es automatisch gültig; nach 90 Tagen ohne Nutzung läuft es ab.",
       "rotate": "Zugriffstoken erneuern",
+      "rotateConfirmTitle": "Zugriffstoken erneuern?",
+      "rotateConfirm": "Das aktuelle Token wird sofort ungültig. Hinterlege das neue Token anschließend in allen verbundenen Shopware-Installationen.",
+      "close": "Schließen",
       "noEntitlements": "Für dieses Kundenkonto ist derzeit kein Extension-Mesh-Zugang verfügbar."
     }
   }

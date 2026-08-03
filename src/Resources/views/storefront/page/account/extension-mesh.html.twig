@@ -19,24 +19,70 @@
                         value="{{ extensionMeshRegistryUrl }}"
                     >
 
-                    <label class="form-label" for="extension-mesh-access-token">
-                        {{ 'extensionMesh.account.accessToken'|trans|sw_sanitize }}
-                    </label>
-                    <input
-                        id="extension-mesh-access-token"
-                        class="form-control font-monospace"
-                        type="text"
-                        readonly
-                        autocomplete="off"
-                        value="{{ extensionMeshToken }}"
-                    >
+                    <details class="mb-3">
+                        <summary class="btn btn-outline-secondary">
+                            {{ 'extensionMesh.account.reveal'|trans|sw_sanitize }}
+                        </summary>
+                        <label class="form-label mt-3" for="extension-mesh-access-token">
+                            {{ 'extensionMesh.account.accessToken'|trans|sw_sanitize }}
+                        </label>
+                        <input
+                            id="extension-mesh-access-token"
+                            class="form-control font-monospace"
+                            type="text"
+                            readonly
+                            autocomplete="off"
+                            spellcheck="false"
+                            value="{{ extensionMeshToken }}"
+                        >
+                    </details>
                     <p class="form-text">{{ 'extensionMesh.account.secretWarning'|trans|sw_sanitize }}</p>
 
-                    <form method="post" action="{{ path('frontend.extension_mesh.account.rotate') }}">
-                        <button class="btn btn-outline-danger" type="submit">
-                            {{ 'extensionMesh.account.rotate'|trans|sw_sanitize }}
-                        </button>
-                    </form>
+                    <button
+                        class="btn btn-outline-danger"
+                        type="button"
+                        data-bs-toggle="modal"
+                        data-bs-target="#extension-mesh-rotate-token"
+                    >
+                        {{ 'extensionMesh.account.rotate'|trans|sw_sanitize }}
+                    </button>
+
+                    <div
+                        id="extension-mesh-rotate-token"
+                        class="modal fade"
+                        tabindex="-1"
+                        aria-labelledby="extension-mesh-rotate-token-title"
+                        aria-hidden="true"
+                    >
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h2 id="extension-mesh-rotate-token-title" class="modal-title h5">
+                                        {{ 'extensionMesh.account.rotateConfirmTitle'|trans|sw_sanitize }}
+                                    </h2>
+                                    <button
+                                        type="button"
+                                        class="btn-close"
+                                        data-bs-dismiss="modal"
+                                        aria-label="{{ 'extensionMesh.account.close'|trans|sw_sanitize }}"
+                                    ></button>
+                                </div>
+                                <div class="modal-body">
+                                    {{ 'extensionMesh.account.rotateConfirm'|trans|sw_sanitize }}
+                                </div>
+                                <div class="modal-footer">
+                                    <button class="btn btn-secondary" type="button" data-bs-dismiss="modal">
+                                        {{ 'global.default.cancel'|trans|sw_sanitize }}
+                                    </button>
+                                    <form method="post" action="{{ path('frontend.extension_mesh.account.rotate') }}">
+                                        <button class="btn btn-danger" type="submit">
+                                            {{ 'extensionMesh.account.rotate'|trans|sw_sanitize }}
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         {% else %}

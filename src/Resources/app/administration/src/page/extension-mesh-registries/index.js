@@ -7,7 +7,7 @@ const { Criteria } = Shopware.Data;
 Component.register('extension-mesh-registries', {
     template,
 
-    inject: ['extensionMeshApiService', 'repositoryFactory'],
+    inject: ['acl', 'extensionMeshApiService', 'repositoryFactory'],
 
     data() {
         return {
@@ -18,6 +18,7 @@ Component.register('extension-mesh-registries', {
             registries: [],
             credentialRegistryId: null,
             credentialToken: '',
+            registryDeleteId: null,
         };
     },
 
@@ -28,6 +29,18 @@ Component.register('extension-mesh-registries', {
     computed: {
         registryRepository() {
             return this.repositoryFactory.create('extension_mesh_registry_source');
+        },
+
+        canCreate() {
+            return this.acl.can('extension_mesh_registry_source:create');
+        },
+
+        canUpdate() {
+            return this.acl.can('extension_mesh_registry_source:update');
+        },
+
+        canDelete() {
+            return this.acl.can('extension_mesh_registry_source:delete');
         },
     },
 
@@ -90,9 +103,21 @@ Component.register('extension-mesh-registries', {
             });
         },
 
-        async removeRegistry(id) {
+        requestRemoveRegistry(id) {
+            this.registryDeleteId = id;
+        },
+
+        cancelRemoveRegistry() {
+            this.registryDeleteId = null;
+        },
+
+        async removeRegistry() {
+            const id = this.registryDeleteId;
+            if (!id) return;
+
             await this.withLoading(async () => {
                 await this.extensionMeshApiService.removeRegistry(id);
+                this.cancelRemoveRegistry();
                 await this.loadRegistries();
                 Shopware.Utils.EventBus.emit('extension-mesh-registries-changed');
             });

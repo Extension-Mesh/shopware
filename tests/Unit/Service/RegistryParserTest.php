@@ -3,6 +3,7 @@
 namespace ExtensionMesh\Shopware\Test\Unit\Service;
 
 use ExtensionMesh\Shopware\Exception\ExtensionMeshException;
+use ExtensionMesh\Shopware\Infrastructure\Http\NetworkPolicy;
 use ExtensionMesh\Shopware\Service\RegistryParser;
 use PHPUnit\Framework\TestCase;
 
@@ -10,7 +11,7 @@ final class RegistryParserTest extends TestCase
 {
     public function testItSelectsTheNewestCompatibleRelease(): void
     {
-        $parser = new RegistryParser();
+        $parser = $this->parser();
         $registry = $parser->parse($this->registryJson([
             $this->release('2.0.0', '^6.8'),
             $this->release('1.2.0', '~6.7.0'),
@@ -34,13 +35,13 @@ final class RegistryParserTest extends TestCase
         $document['extensions'][] = $document['extensions'][0];
 
         $this->expectException(ExtensionMeshException::class);
-        (new RegistryParser())->parse((string) \json_encode($document));
+        $this->parser()->parse((string) \json_encode($document));
     }
 
     public function testItRejectsInvalidCompatibilityConstraints(): void
     {
         $this->expectException(ExtensionMeshException::class);
-        (new RegistryParser())->parse($this->registryJson([
+        $this->parser()->parse($this->registryJson([
             $this->release('1.0.0', 'definitely not a constraint'),
         ]));
     }
@@ -51,7 +52,7 @@ final class RegistryParserTest extends TestCase
         $release['releasedAt'] = 'next Tuesday';
 
         $this->expectException(ExtensionMeshException::class);
-        (new RegistryParser())->parse($this->registryJson([$release]));
+        $this->parser()->parse($this->registryJson([$release]));
     }
 
     public function testItRejectsAnImpossibleCalendarDate(): void
@@ -60,7 +61,7 @@ final class RegistryParserTest extends TestCase
         $release['releasedAt'] = '2026-02-31T12:00:00+00:00';
 
         $this->expectException(ExtensionMeshException::class);
-        (new RegistryParser())->parse($this->registryJson([$release]));
+        $this->parser()->parse($this->registryJson([$release]));
     }
 
     public function testItRejectsUnknownFieldsAndWrongBooleanTypes(): void
@@ -69,7 +70,19 @@ final class RegistryParserTest extends TestCase
         $release['security'] = 'yes';
 
         $this->expectException(ExtensionMeshException::class);
-        (new RegistryParser())->parse($this->registryJson([$release]));
+        $this->parser()->parse($this->registryJson([$release]));
+
+    }
+
+    public function testProductionRejectsAnInsecureArtifactUrlDuringParsing(): void
+    {
+        $release = $this->release('1.0.0', '~6.7.0');
+        $release['downloadUrl'] = 'http://example.test/plugin.zip';
+
+        $this->expectException(ExtensionMeshException::class);
+        $this->expectExceptionMessage('network policy');
+
+        $this->parser()->parse($this->registryJson([$release]));
     }
 
     /**
@@ -101,5 +114,10 @@ final class RegistryParserTest extends TestCase
             'sha256' => \str_repeat('a', 64),
             'releasedAt' => '2026-07-27T12:00:00+00:00',
         ];
+    }
+
+    private function parser(): RegistryParser
+    {
+        return new RegistryParser(new NetworkPolicy(false));
     }
 }

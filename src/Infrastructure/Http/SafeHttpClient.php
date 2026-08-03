@@ -11,6 +11,8 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 final class SafeHttpClient
 {
     private const MAX_REDIRECTS = 5;
+    private const DOCUMENT_MAX_DURATION = 45.0;
+    private const ARTIFACT_MAX_DURATION = 600.0;
 
     public function __construct(
         private readonly HttpClientInterface $client,
@@ -48,7 +50,8 @@ final class SafeHttpClient
             $url,
             $credentialHeaders,
             $credentialOrigin,
-            $accept
+            $accept,
+            self::DOCUMENT_MAX_DURATION
         );
         $content = '';
 
@@ -98,7 +101,8 @@ final class SafeHttpClient
             $url,
             $credentialHeaders,
             $credentialOrigin,
-            $accept
+            $accept,
+            self::ARTIFACT_MAX_DURATION
         );
         $temporaryPath = \tempnam(\sys_get_temp_dir(), 'extension-mesh-');
         if (!\is_string($temporaryPath)) {
@@ -143,12 +147,19 @@ final class SafeHttpClient
         string $url,
         array $credentialHeaders = [],
         ?string $credentialOrigin = null,
-        string $accept = 'application/json'
+        string $accept = 'application/json',
+        float $maxDuration = self::DOCUMENT_MAX_DURATION
     ): ResponseInterface
     {
         $credentialHeaders = $this->validateCredentialHeaders($credentialHeaders);
+        $deadline = \microtime(true) + $maxDuration;
 
         for ($redirects = 0; $redirects <= self::MAX_REDIRECTS; ++$redirects) {
+            $remainingDuration = $deadline - \microtime(true);
+            if ($remainingDuration <= 0) {
+                throw ExtensionMeshException::registryUnavailable('the request exceeded its total duration limit.');
+            }
+
             $parts = \parse_url($url);
             if ($parts === false || !isset($parts['host'])) {
                 throw ExtensionMeshException::invalidRegistryUrl('a redirect target is invalid.');
@@ -172,6 +183,7 @@ final class SafeHttpClient
                     'headers' => $headers,
                     'max_redirects' => 0,
                     'timeout' => 30,
+                    'max_duration' => $remainingDuration,
                     'resolve' => [$parts['host'] => $resolvedIp],
                 ]);
 

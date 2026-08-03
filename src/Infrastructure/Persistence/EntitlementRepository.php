@@ -8,8 +8,12 @@ use ExtensionMesh\Shopware\Core\Content\ExtensionMeshProduct\ExtensionMeshProduc
 use ExtensionMesh\Shopware\Core\Content\ExtensionMeshProduct\ExtensionMeshProductEntity;
 use ExtensionMesh\Shopware\Core\Content\RepositoryConnection\RepositoryConnectionCollection;
 use ExtensionMesh\Shopware\Core\Content\RepositoryConnection\RepositoryConnectionEntity;
+use ExtensionMesh\Shopware\Service\OrderEntitlementReconciler;
+use ExtensionMesh\Shopware\Service\EntitlementProductEligibility;
+use Shopware\Core\Checkout\Order\Aggregate\OrderTransaction\OrderTransactionStates;
 use Shopware\Core\Checkout\Order\OrderCollection;
 use Shopware\Core\Checkout\Order\OrderEntity;
+use Shopware\Core\Checkout\Order\OrderStates;
 use Shopware\Core\Content\Product\ProductCollection;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Context;
@@ -23,7 +27,7 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\RangeFilter;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 
-final class EntitlementRepository
+final class EntitlementRepository implements OrderEntitlementReconciler, EntitlementProductEligibility
 {
     private const ORDER_VALIDITY_DAYS_CONFIG =
         'ExtensionMesh.config.orderEntitlementValidityDays';
@@ -108,19 +112,31 @@ final class EntitlementRepository
         $existingCriteria = (new Criteria())
             ->addFilter(new EqualsFilter('orderId', $orderId))
             ->addFilter(new EqualsFilter('orderVersionId', Defaults::LIVE_VERSION));
+        /** @var array<string, list<EntitlementEntity>> $existing */
         $existing = [];
         $existingEntitlements = $this->repository->search($existingCriteria, $context);
         foreach ($existingEntitlements as $entity) {
-            $productId = $entity->getProductId();
-            $existing[$productId] = ($existing[$productId] ?? 0) + 1;
+            $existing[$entity->getProductId()][] = $entity;
         }
 
         $now = new \DateTimeImmutable();
         $validityDays = $this->orderValidityDays($order->getSalesChannelId());
         $validUntil = $validityDays === null ? null : $now->modify(\sprintf('+%d days', $validityDays));
         $writes = [];
+        $updates = [];
         foreach ($quantities as $productId => $quantity) {
-            $missing = \max(0, $quantity - ($existing[$productId] ?? 0));
+            $productEntitlements = $existing[$productId] ?? [];
+            foreach (\array_slice($productEntitlements, 0, $quantity) as $entitlement) {
+                if (!$entitlement->isEnabled()) {
+                    $updates[] = [
+                        'id' => $entitlement->getId(),
+                        'enabled' => true,
+                        'validUntil' => $validUntil,
+                    ];
+                }
+            }
+
+            $missing = \max(0, $quantity - \count($productEntitlements));
             for ($index = 0; $index < $missing; ++$index) {
                 $writes[] = [
                     'id' => Uuid::randomHex(),
@@ -138,8 +154,43 @@ final class EntitlementRepository
         if ($writes !== []) {
             $this->repository->create($writes, $context);
         }
+        if ($updates !== []) {
+            $this->repository->update($updates, $context);
+        }
 
-        return \count($writes);
+        return \count($writes) + \count($updates);
+    }
+
+    public function reconcileForOrder(string $orderId, Context $context): int
+    {
+        if (!Uuid::isValid($orderId)) {
+            return 0;
+        }
+
+        $criteria = (new Criteria([$orderId]))
+            ->addAssociation('stateMachineState')
+            ->addAssociation('transactions.stateMachineState');
+        $order = $this->orders->search($criteria, $context)->first();
+        if (!$order instanceof OrderEntity) {
+            return 0;
+        }
+
+        $orderCancelled = $order->getStateMachineState()?->getTechnicalName() === OrderStates::STATE_CANCELLED;
+        $hasPaidTransaction = false;
+        foreach ($order->getTransactions() ?? [] as $transaction) {
+            if ($transaction->getStateMachineState()?->getTechnicalName() === OrderTransactionStates::STATE_PAID) {
+                $hasPaidTransaction = true;
+                break;
+            }
+        }
+
+        if ($orderCancelled || !$hasPaidTransaction) {
+            $this->disableForOrder($orderId, $context);
+
+            return 0;
+        }
+
+        return $this->issueForOrder($orderId, $context);
     }
 
     public function disableForOrder(string $orderId, Context $context): void

@@ -33,8 +33,12 @@
       "explanation": "Use these details in ExtensionMesh on the Shopware installation that should receive your available extensions and updates.",
       "registryUrl": "Registry URL",
       "accessToken": "Access token",
-      "secretWarning": "Treat this token like a password. Rotating it immediately disables the previous token.",
+      "reveal": "Reveal access token",
+      "secretWarning": "Treat this token like a password. Active clients keep it valid automatically; it expires after 90 days without use.",
       "rotate": "Rotate access token",
+      "rotateConfirmTitle": "Rotate access token?",
+      "rotateConfirm": "The current token will stop working immediately. Update every connected Shopware installation with the replacement token.",
+      "close": "Close",
       "noEntitlements": "No Extension Mesh access is currently available for this customer account."
     }
   }

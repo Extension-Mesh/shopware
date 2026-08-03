@@ -13,7 +13,11 @@
             {{ error }}
         </mt-banner>
 
-        <mt-card class="extension-mesh-page__card" :title="$t('extension-mesh.repositories.connectTitle')">
+        <mt-card
+            v-if="canCreate"
+            class="extension-mesh-page__card"
+            :title="$t('extension-mesh.repositories.connectTitle')"
+        >
             <template #headerRight>
                     <a
                         v-if="isGithubProvider"
@@ -168,6 +172,7 @@
 
                 <template #actions="{ item }">
                     <sw-context-menu-item
+                        v-if="canUpdate"
                         :disabled="isLoading
                             || (!item.enabled && item.onboardingStatus !== 'failed')"
                         @click="syncRepository(item.id)"
@@ -177,15 +182,17 @@
                             : $t('extension-mesh.repositories.sync') }}
                     </sw-context-menu-item>
                     <sw-context-menu-item
+                        v-if="canUpdate"
                         :disabled="isLoading"
                         @click="editCredential(item.id)"
                     >
                         {{ $t('extension-mesh.repositories.changeToken') }}
                     </sw-context-menu-item>
                     <sw-context-menu-item
+                        v-if="canDelete"
                         variant="danger"
                         :disabled="isLoading"
-                        @click="unlinkRepository(item.id)"
+                        @click="requestUnlinkRepository(item.id)"
                     >
                         {{ $t('extension-mesh.repositories.unlink') }}
                     </sw-context-menu-item>
@@ -298,6 +305,23 @@
                     @click="saveCredential(credentialRepositoryId)"
                 >
                     {{ $t('global.default.save') }}
+                </mt-button>
+            </template>
+        </sw-modal>
+
+        <sw-modal
+            v-if="unlinkRepositoryId"
+            :title="$t('extension-mesh.repositories.unlinkTitle')"
+            variant="small"
+            @modal-close="cancelUnlinkRepository"
+        >
+            <p>{{ $t('extension-mesh.repositories.unlinkConfirm') }}</p>
+            <template #modal-footer>
+                <mt-button variant="secondary" :disabled="isLoading" @click="cancelUnlinkRepository">
+                    {{ $t('global.default.cancel') }}
+                </mt-button>
+                <mt-button variant="critical" :disabled="isLoading" @click="unlinkRepository">
+                    {{ $t('extension-mesh.repositories.unlink') }}
                 </mt-button>
             </template>
         </sw-modal>

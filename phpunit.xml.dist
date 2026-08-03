@@ -13,5 +13,11 @@
         <include>
             <directory suffix=".php">src</directory>
         </include>
+        <exclude>
+            <directory>src/Core/Content</directory>
+            <directory>src/Migration</directory>
+            <directory>src/Resources</directory>
+            <file>src/ExtensionMesh.php</file>
+        </exclude>
     </source>
 </phpunit>

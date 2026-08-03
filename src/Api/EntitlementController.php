@@ -12,7 +12,7 @@ use Symfony\Component\Routing\Attribute\Route;
 
 #[Route(defaults: [
     PlatformRequest::ATTRIBUTE_ROUTE_SCOPE => [ApiRouteScope::ID],
-    PlatformRequest::ATTRIBUTE_ACL => ['system.plugin_maintain'],
+    PlatformRequest::ATTRIBUTE_ACL => ['extension_mesh_entitlement:read'],
 ])]
 final class EntitlementController
 {

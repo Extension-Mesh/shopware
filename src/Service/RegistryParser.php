@@ -5,9 +5,14 @@ namespace ExtensionMesh\Shopware\Service;
 use Composer\Semver\Semver;
 use Composer\Semver\VersionParser;
 use ExtensionMesh\Shopware\Exception\ExtensionMeshException;
+use ExtensionMesh\Shopware\Infrastructure\Http\NetworkPolicy;
 
 final class RegistryParser
 {
+    public function __construct(private readonly NetworkPolicy $networkPolicy)
+    {
+    }
+
     /**
      * @return array{
      *     schemaVersion: 1,
@@ -361,6 +366,15 @@ final class RegistryParser
         }
         if (isset($parts['user']) || isset($parts['pass']) || isset($parts['fragment'])) {
             throw ExtensionMeshException::invalidRegistry(\sprintf('"%s" cannot contain credentials or a fragment.', $field));
+        }
+        try {
+            $this->networkPolicy->assertUrlPolicy($value);
+        } catch (ExtensionMeshException $exception) {
+            throw ExtensionMeshException::invalidRegistry(\sprintf(
+                '"%s" violates the configured network policy: %s',
+                $field,
+                $exception->getMessage()
+            ));
         }
 
         return $value;

@@ -1,3 +1,5 @@
+import { extensionMeshVersionIsNewer } from '../../util/extension-mesh';
+
 const { Component } = Shopware;
 
 Component.override('sw-extension-my-extensions-listing', {
@@ -79,67 +81,7 @@ Component.override('sw-extension-my-extensions-listing', {
         },
 
         extensionMeshVersionIsNewer(candidate, installed) {
-            if (!candidate || !installed) {
-                return false;
-            }
-
-            const parse = (version) => {
-                const match = String(version).trim().replace(/^v/, '').match(
-                    /^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:\.(\d+))?(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/,
-                );
-
-                if (!match) {
-                    return null;
-                }
-
-                return {
-                    core: match.slice(1, 5).map((part) => Number(part || 0)),
-                    preRelease: match[5]?.split('.') || [],
-                };
-            };
-            const left = parse(candidate);
-            const right = parse(installed);
-
-            if (!left || !right) {
-                return false;
-            }
-
-            for (let index = 0; index < left.core.length; index += 1) {
-                if (left.core[index] !== right.core[index]) {
-                    return left.core[index] > right.core[index];
-                }
-            }
-
-            if (left.preRelease.length === 0 || right.preRelease.length === 0) {
-                return left.preRelease.length === 0 && right.preRelease.length > 0;
-            }
-
-            for (let index = 0; index < Math.max(left.preRelease.length, right.preRelease.length); index += 1) {
-                const leftPart = left.preRelease[index];
-                const rightPart = right.preRelease[index];
-
-                if (leftPart === undefined || rightPart === undefined) {
-                    return rightPart === undefined;
-                }
-
-                if (leftPart === rightPart) {
-                    continue;
-                }
-
-                const leftNumeric = /^\d+$/.test(leftPart);
-                const rightNumeric = /^\d+$/.test(rightPart);
-                if (leftNumeric && rightNumeric) {
-                    return Number(leftPart) > Number(rightPart);
-                }
-
-                if (leftNumeric !== rightNumeric) {
-                    return !leftNumeric;
-                }
-
-                return leftPart > rightPart;
-            }
-
-            return false;
+            return extensionMeshVersionIsNewer(candidate, installed);
         },
     },
 });

@@ -295,11 +295,16 @@ jq -e '.data.eligibleProductIds
     "${temporary_dir}/entitlement-options.json" >/dev/null \
     || fail 'the entitlement selector options contained an ineligible product'
 
-expect_status 204 "${temporary_dir}/publication-sync-v1.json" \
+expect_status 202 "${temporary_dir}/publication-sync-v1.json" \
     -X POST "${seller_api}/_action/extension-mesh/publication/synchronize" \
     -H "Authorization: Bearer ${seller_admin_token}" \
     -H 'Content-Type: application/json' \
     --data '{}'
+jq -e '.queued == true' "${temporary_dir}/publication-sync-v1.json" >/dev/null \
+    || fail 'the publication synchronization request was not queued'
+docker compose exec -T seller \
+    bin/console messenger:consume async \
+    --time-limit=10 --no-ansi --no-interaction >/dev/null
 wait_for_published_release \
     "${product_id}" \
     '1.0.0' \
@@ -499,18 +504,20 @@ expect_status 204 "${temporary_dir}/manual-smoke-disable.json" \
     -H "Authorization: Bearer ${seller_admin_token}" \
     -H 'Content-Type: application/json' \
     --data "${manual_smoke_disabled_payload}"
-expect_status 200 "${temporary_dir}/manual-smoke-disabled-registry.json" \
+expect_status 401 "${temporary_dir}/manual-smoke-disabled-registry.json" \
     "${seller_storefront}/extension-mesh/v1/registry" \
     -H "Authorization: Bearer ${manual_smoke_token}"
-jq -e '.extensions | length == 0' \
-    "${temporary_dir}/manual-smoke-disabled-registry.json" >/dev/null \
-    || fail 'disabling a standalone manual entitlement did not revoke update access'
 
 expect_status 204 "${temporary_dir}/manual-smoke-re-enable.json" \
     -X PATCH "${seller_api}/extension-mesh-entitlement/${manual_smoke_id}" \
     -H "Authorization: Bearer ${seller_admin_token}" \
     -H 'Content-Type: application/json' \
     --data "${manual_smoke_payload}"
+expect_status 200 "${temporary_dir}/manual-smoke-restored-access.json" \
+    "${seller_storefront}/store-api/extension-mesh/access" \
+    -H "sw-access-key: ${sales_channel_access_key}" \
+    -H "sw-context-token: ${context_token}"
+manual_smoke_token=$(jq -er '.accessToken' "${temporary_dir}/manual-smoke-restored-access.json")
 expect_status 200 "${temporary_dir}/manual-smoke-re-enabled-registry.json" \
     "${seller_storefront}/extension-mesh/v1/registry" \
     -H "Authorization: Bearer ${manual_smoke_token}"
@@ -524,12 +531,9 @@ expect_status 204 "${temporary_dir}/manual-smoke-delete.json" \
 expect_status 404 "${temporary_dir}/manual-smoke-deleted-detail.json" \
     "${seller_api}/extension-mesh-entitlement/${manual_smoke_id}" \
     -H "Authorization: Bearer ${seller_admin_token}"
-expect_status 200 "${temporary_dir}/manual-smoke-deleted-registry.json" \
+expect_status 401 "${temporary_dir}/manual-smoke-deleted-registry.json" \
     "${seller_storefront}/extension-mesh/v1/registry" \
     -H "Authorization: Bearer ${manual_smoke_token}"
-jq -e '.extensions | length == 0' \
-    "${temporary_dir}/manual-smoke-deleted-registry.json" >/dev/null \
-    || fail 'deleting a standalone manual entitlement did not revoke update access'
 
 expect_status 200 "${temporary_dir}/cart.json" \
     -X POST "${seller_storefront}/store-api/checkout/cart/line-item" \
@@ -653,6 +657,15 @@ expect_status 204 "${temporary_dir}/add-v2.json" \
     -H 'Content-Type: application/json' \
     --data "{\"downloads\":[{\"id\":\"${download_v2_id}\",\"mediaId\":\"${media_v2_id}\",\"position\":2}]}"
 
+expect_status 202 "${temporary_dir}/publication-sync-v2.json" \
+    -X POST "${seller_api}/_action/extension-mesh/publication/synchronize" \
+    -H "Authorization: Bearer ${seller_admin_token}" \
+    -H 'Content-Type: application/json' \
+    --data '{}'
+docker compose exec -T seller \
+    bin/console messenger:consume async \
+    --time-limit=10 --no-ansi --no-interaction >/dev/null
+
 for request_number in 1 2 3 4; do
     curl -fsS \
         "${seller_storefront}/extension-mesh/v1/registry" \
@@ -663,7 +676,7 @@ wait
 for request_number in 1 2 3 4; do
     jq -e '.extensions[0].releases[] | select(.version == "1.1.0")' \
         "${temporary_dir}/concurrent-registry-${request_number}.json" >/dev/null \
-        || fail 'a concurrent first registry refresh did not publish version 1.1.0'
+        || fail 'a concurrent registry read did not return the published version 1.1.0'
 done
 
 expect_status 200 "${temporary_dir}/registry-v2.json" \
@@ -753,11 +766,9 @@ expect_status 200 "${temporary_dir}/refund.json" \
     -H "Authorization: Bearer ${seller_admin_token}" \
     -H 'Content-Type: application/json' \
     --data '{}'
-expect_status 200 "${temporary_dir}/refunded-registry.json" \
+expect_status 401 "${temporary_dir}/refunded-registry.json" \
     "${seller_storefront}/extension-mesh/v1/registry" \
     -H "Authorization: Bearer ${rotated_token}"
-jq -e '.extensions | length == 0' "${temporary_dir}/refunded-registry.json" >/dev/null \
-    || fail 'a refund did not disable the order-linked entitlements'
 expect_status 401 "${temporary_dir}/refunded-artifact.json" \
     "${artifact_url}" \
     -H "Authorization: Bearer ${rotated_token}"
@@ -782,6 +793,11 @@ expect_status 204 "${temporary_dir}/re-enable-entitlement.json" \
     -H "Authorization: Bearer ${seller_admin_token}" \
     -H 'Content-Type: application/json' \
     --data "${linked_entitlement_payload}"
+expect_status 200 "${temporary_dir}/seller-override-access.json" \
+    "${seller_storefront}/store-api/extension-mesh/access" \
+    -H "sw-access-key: ${sales_channel_access_key}" \
+    -H "sw-context-token: ${context_token}"
+rotated_token=$(jq -er '.accessToken' "${temporary_dir}/seller-override-access.json")
 expect_status 200 "${temporary_dir}/seller-override-registry.json" \
     "${seller_storefront}/extension-mesh/v1/registry" \
     -H "Authorization: Bearer ${rotated_token}"
@@ -792,11 +808,9 @@ expect_status 204 "${temporary_dir}/disable-entitlement.json" \
     -H "Authorization: Bearer ${seller_admin_token}" \
     -H 'Content-Type: application/json' \
     --data "${disabled_entitlement_payload}"
-expect_status 200 "${temporary_dir}/disabled-registry.json" \
+expect_status 401 "${temporary_dir}/disabled-registry.json" \
     "${seller_storefront}/extension-mesh/v1/registry" \
     -H "Authorization: Bearer ${rotated_token}"
-jq -e '.extensions | length == 0' "${temporary_dir}/disabled-registry.json" >/dev/null \
-    || fail 'a disabled entitlement still exposed updates'
 
 expect_status 204 "${temporary_dir}/delete-entitlement.json" \
     -X DELETE "${seller_api}/extension-mesh-entitlement/${entitlement_id}" \

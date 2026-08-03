@@ -5,7 +5,6 @@ Shopware.Service('privileges').addPrivilegeMappingEntry({
     roles: {
         viewer: {
             privileges: [
-                'system.plugin_maintain',
                 'extension_mesh_registry_source:read',
                 'extension_mesh_repository_connection:read',
                 'extension_mesh_published_release:read',
@@ -19,6 +18,9 @@ Shopware.Service('privileges').addPrivilegeMappingEntry({
         },
         editor: {
             privileges: [
+                'extension_mesh_registry_source:update',
+                'extension_mesh_repository_connection:update',
+                'extension_mesh_published_release:update',
                 'extension_mesh_entitlement:update',
             ],
             dependencies: [
@@ -27,6 +29,8 @@ Shopware.Service('privileges').addPrivilegeMappingEntry({
         },
         creator: {
             privileges: [
+                'extension_mesh_registry_source:create',
+                'extension_mesh_repository_connection:create',
                 'extension_mesh_entitlement:create',
             ],
             dependencies: [
@@ -36,6 +40,8 @@ Shopware.Service('privileges').addPrivilegeMappingEntry({
         },
         deleter: {
             privileges: [
+                'extension_mesh_registry_source:delete',
+                'extension_mesh_repository_connection:delete',
                 'extension_mesh_entitlement:delete',
             ],
             dependencies: [

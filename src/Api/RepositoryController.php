@@ -14,7 +14,6 @@ use Symfony\Component\Routing\Attribute\Route;
 
 #[Route(defaults: [
     PlatformRequest::ATTRIBUTE_ROUTE_SCOPE => [ApiRouteScope::ID],
-    PlatformRequest::ATTRIBUTE_ACL => ['system.plugin_maintain'],
 ])]
 final class RepositoryController
 {
@@ -25,7 +24,8 @@ final class RepositoryController
     #[Route(
         path: '/api/_action/extension-mesh/repositories/providers',
         name: 'api.action.extension_mesh.repositories.providers',
-        methods: [Request::METHOD_GET]
+        methods: [Request::METHOD_GET],
+        defaults: [PlatformRequest::ATTRIBUTE_ACL => ['extension_mesh_repository_connection:read']]
     )]
     public function providers(): JsonResponse
     {
@@ -35,7 +35,8 @@ final class RepositoryController
     #[Route(
         path: '/api/_action/extension-mesh/repositories',
         name: 'api.action.extension_mesh.repositories.connect',
-        methods: [Request::METHOD_POST]
+        methods: [Request::METHOD_POST],
+        defaults: [PlatformRequest::ATTRIBUTE_ACL => ['extension_mesh_repository_connection:create']]
     )]
     public function connect(Request $request, Context $context): JsonResponse
     {
@@ -62,7 +63,8 @@ final class RepositoryController
         path: '/api/_action/extension-mesh/repositories/{id}/sync',
         name: 'api.action.extension_mesh.repositories.sync',
         requirements: ['id' => '[0-9a-f]{32}'],
-        methods: [Request::METHOD_POST]
+        methods: [Request::METHOD_POST],
+        defaults: [PlatformRequest::ATTRIBUTE_ACL => ['extension_mesh_repository_connection:update']]
     )]
     public function synchronize(string $id, Context $context): JsonResponse
     {
@@ -80,7 +82,8 @@ final class RepositoryController
         path: '/api/_action/extension-mesh/repositories/{id}/credential',
         name: 'api.action.extension_mesh.repositories.credential',
         requirements: ['id' => '[0-9a-f]{32}'],
-        methods: [Request::METHOD_PUT]
+        methods: [Request::METHOD_PUT],
+        defaults: [PlatformRequest::ATTRIBUTE_ACL => ['extension_mesh_repository_connection:update']]
     )]
     public function credential(string $id, Request $request, Context $context): JsonResponse
     {
@@ -102,7 +105,8 @@ final class RepositoryController
         path: '/api/_action/extension-mesh/repositories/{id}',
         name: 'api.action.extension_mesh.repositories.unlink',
         requirements: ['id' => '[0-9a-f]{32}'],
-        methods: [Request::METHOD_DELETE]
+        methods: [Request::METHOD_DELETE],
+        defaults: [PlatformRequest::ATTRIBUTE_ACL => ['extension_mesh_repository_connection:delete']]
     )]
     public function unlink(string $id, Context $context): Response
     {

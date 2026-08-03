@@ -6,13 +6,14 @@ on:
       dockware_image:
         description: Dockware image used for release verification
         required: false
-        default: dockware/shopware:6.7.12.1
+        default: dockware/shopware:6.7.12.2
         type: string
   push:
     branches:
       - main
     paths:
       - composer.json
+      - composer.lock
       - .github/workflows/publish-extension.yml
 
 permissions: {}
@@ -47,20 +48,21 @@ jobs:
         with:
           php-version: "8.2"
           extensions: json, sodium, zip
-          coverage: none
+          coverage: pcov
 
       - name: Install Shopware CLI
         uses: FriendsOfShopware/shopware-cli-action@b67b48ccb52beb8533ea276152e1f89f29bbd080 # v3
         with:
-          version: latest
+          version: 0.15.3
 
       - name: Install dependencies
-        run: composer install --no-interaction --prefer-dist
+        run: composer install --no-interaction --prefer-dist --no-progress
 
       - name: Validate, test, analyse and audit
         run: |
           composer validate --strict --no-check-version
-          composer test
+          composer test:administration
+          composer coverage
           composer analyse
           composer audit --locked --no-interaction
 
@@ -79,6 +81,14 @@ jobs:
           test -f "$source_archive"
           shopware-cli extension validate "$source_archive"
 
+      - name: Preserve the verified release artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: verified-extension-archive
+          path: ExtensionMesh-${{ github.sha }}.zip
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Validate development environment
         run: |
           docker compose config --quiet
@@ -90,7 +100,7 @@ jobs:
     permissions:
       contents: read
     env:
-      DOCKWARE_IMAGE: ${{ inputs.dockware_image || 'dockware/shopware:6.7.12.1' }}
+      DOCKWARE_IMAGE: ${{ inputs.dockware_image || 'dockware/shopware:6.7.12.2' }}
     steps:
       - name: Check out source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -154,7 +164,33 @@ jobs:
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "tag=v${version}" >> "$GITHUB_OUTPUT"
 
+      - name: Download the verified release artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: verified-extension-archive
+          path: ${{ runner.temp }}/verified-extension
+
       - name: Build and publish the compatible package
         env:
           EXTENSION_MESH_TAG: ${{ steps.extension.outputs.tag }}
-        uses: Extension-Mesh/shopware-publisher@v0.1.0-alpha.1
+        uses: Extension-Mesh/shopware-publisher@ddc9b3590a8502679fcffc3fd24f82fd5c68ec88
+
+      - name: Confirm the published ZIP is the verified artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.extension.outputs.tag }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/published-extension"
+          gh release download "$RELEASE_TAG" \
+            --pattern 'ExtensionMesh-*.zip' \
+            --dir "$RUNNER_TEMP/published-extension"
+          mapfile -d '' verified < <(
+            find "$RUNNER_TEMP/verified-extension" -maxdepth 1 -type f -name '*.zip' -print0
+          )
+          mapfile -d '' published < <(
+            find "$RUNNER_TEMP/published-extension" -maxdepth 1 -type f -name '*.zip' -print0
+          )
+          test "${#verified[@]}" -eq 1
+          test "${#published[@]}" -eq 1
+          cmp --silent "${verified[0]}" "${published[0]}"

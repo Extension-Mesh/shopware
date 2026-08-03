@@ -6,6 +6,7 @@ use Shopware\Core\Checkout\Customer\CustomerDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\CreatedAtField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\DateTimeField;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\BoolField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\FkField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\PrimaryKey;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\Required;
@@ -44,6 +45,8 @@ final class AccessTokenDefinition extends EntityDefinition
             new StringField('label', 'label'),
             new DateTimeField('last_used_at', 'lastUsedAt'),
             new DateTimeField('revoked_at', 'revokedAt'),
+            (new DateTimeField('expires_at', 'expiresAt'))->addFlags(new Required()),
+            new BoolField('active_slot', 'activeSlot'),
             new CreatedAtField(),
             new UpdatedAtField(),
             new ManyToOneAssociationField('customer', 'customer_id', CustomerDefinition::class),

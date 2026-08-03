@@ -37,6 +37,30 @@ bin/console plugin:install --activate ExtensionMesh
 
 Do not use `dev-main` as an unattended production update source.
 
+## Production operation
+
+Repository onboarding and publication validation run asynchronously. Production
+installations must keep Shopware's `async` Messenger transport under a process
+supervisor; without a worker, newly connected repositories and product-download
+changes remain queued:
+
+```bash
+bin/console messenger:consume async --time-limit=300 --memory-limit=512M
+```
+
+Keep Shopware's scheduled-task runner enabled as well so connected repositories
+are refreshed periodically. Run both commands through systemd, Supervisor,
+Kubernetes, or the equivalent platform facility instead of an interactive shell.
+
+Seller access tokens use a rolling 90-day inactivity window. Successful registry
+or artifact requests extend the window automatically, so active system-to-system
+connections do not require manual rotation. A token is also revoked when its
+customer loses all ExtensionMesh entitlements.
+
+Publisher endpoints are rate-limited per access token and client address: 60
+registry reads and 10 artifact downloads per minute. Rejected requests return
+HTTP `429` with a `Retry-After` header.
+
 ## Add a registry
 
 1. Open **Extensions → My extensions → Registries**.
@@ -96,8 +120,8 @@ find src -name '*.php' -print0 | xargs -0 -n1 php -l
 
 The repository CI performs the same baseline checks, validates the Docker
 configuration and scripts. The release workflow builds and validates the
-installable archive with Shopware CLI before publishing through the separate
-publisher.
+installable archive with Shopware CLI and verifies that the published ZIP is
+byte-identical to that artifact.
 
 ## Releases
 

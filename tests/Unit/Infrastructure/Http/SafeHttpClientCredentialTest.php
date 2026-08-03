@@ -16,6 +16,8 @@ final class SafeHttpClientCredentialTest extends TestCase
         $client = new MockHttpClient(static function (string $method, string $url, array $options): MockResponse {
             self::assertSame('http://127.0.0.1/registry.json', $url);
             self::assertContains('Authorization: Bearer paid-token', $options['normalized_headers']['authorization']);
+            self::assertGreaterThan(44.0, $options['max_duration']);
+            self::assertLessThanOrEqual(45.0, $options['max_duration']);
 
             return new MockResponse('{"schemaVersion":1,"name":"test","extensions":[]}');
         });

@@ -10,7 +10,6 @@ use Shopware\Core\System\SystemConfig\SystemConfigService;
 final class PublisherCatalogService
 {
     public function __construct(
-        private readonly PublicationSynchronizer $synchronizer,
         private readonly PublicationRepository $releases,
         private readonly CustomerProductAccessResolver $access,
         private readonly SystemConfigService $systemConfig
@@ -26,7 +25,6 @@ final class PublisherCatalogService
         string $artifactUrlTemplate,
         Context $context
     ): array {
-        $this->synchronizer->synchronize($context);
         $productIds = $this->access->productIds($customerId, $salesChannelId, $context);
         $published = $this->releases->validForProducts($productIds, $context);
 

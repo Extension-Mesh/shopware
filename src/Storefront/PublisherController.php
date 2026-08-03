@@ -6,8 +6,8 @@ use ExtensionMesh\Shopware\Exception\ExtensionMeshException;
 use ExtensionMesh\Shopware\Infrastructure\Persistence\PublicationRepository;
 use ExtensionMesh\Shopware\Service\AccessTokenService;
 use ExtensionMesh\Shopware\Service\CustomerProductAccessResolver;
-use ExtensionMesh\Shopware\Service\PublicationSynchronizer;
 use ExtensionMesh\Shopware\Service\PublisherCatalogService;
+use ExtensionMesh\Shopware\Service\PublisherRequestLimiter;
 use Shopware\Core\Content\Media\MediaService;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\PlatformRequest;
@@ -27,10 +27,10 @@ final class PublisherController extends AbstractController
     public function __construct(
         private readonly AccessTokenService $tokens,
         private readonly PublisherCatalogService $catalog,
-        private readonly PublicationSynchronizer $synchronizer,
         private readonly PublicationRepository $releases,
         private readonly CustomerProductAccessResolver $access,
-        private readonly MediaService $mediaService
+        private readonly MediaService $mediaService,
+        private readonly PublisherRequestLimiter $requestLimiter
     ) {
     }
 
@@ -41,6 +41,11 @@ final class PublisherController extends AbstractController
     )]
     public function registry(Request $request, SalesChannelContext $salesChannelContext): JsonResponse
     {
+        $retryAfter = $this->requestLimiter->registry($request);
+        if ($retryAfter instanceof \DateTimeImmutable) {
+            return $this->rateLimited($retryAfter);
+        }
+
         try {
             $token = $this->authenticate($request, $salesChannelContext);
             $artifactTemplate = $request->getSchemeAndHttpHost() . '/extension-mesh/v1/artifacts/{releaseId}';
@@ -75,9 +80,13 @@ final class PublisherController extends AbstractController
         Request $request,
         SalesChannelContext $salesChannelContext
     ): Response {
+        $retryAfter = $this->requestLimiter->artifact($request);
+        if ($retryAfter instanceof \DateTimeImmutable) {
+            return $this->rateLimited($retryAfter);
+        }
+
         try {
             $token = $this->authenticate($request, $salesChannelContext);
-            $this->synchronizer->synchronize($salesChannelContext->getContext());
             $release = $this->releases->get($releaseId, $salesChannelContext->getContext());
             if (
                 $release === null
@@ -157,5 +166,20 @@ final class PublisherController extends AbstractController
         $response->headers->set('Pragma', 'no-cache');
         $response->headers->set('Vary', 'Authorization');
         $response->headers->set('X-Content-Type-Options', 'nosniff');
+    }
+
+    private function rateLimited(\DateTimeImmutable $retryAfter): JsonResponse
+    {
+        $response = $this->privateJson([
+            'errors' => [[
+                'status' => '429',
+                'code' => 'EXTENSION_MESH__RATE_LIMIT_EXCEEDED',
+                'title' => 'Too many registry requests',
+                'detail' => 'The request limit was exceeded. Retry later.',
+            ]],
+        ], Response::HTTP_TOO_MANY_REQUESTS);
+        $response->headers->set('Retry-After', (string) \max(1, $retryAfter->getTimestamp() - \time()));
+
+        return $response;
     }
 }
