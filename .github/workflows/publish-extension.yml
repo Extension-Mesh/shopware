@@ -23,6 +23,66 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  release-context:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      publish: ${{ steps.release.outputs.publish }}
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - name: Check out release history
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release context
+        id: release
+        shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(jq -er '.version' composer.json)"
+          if [[ ! "$version" =~ ^[0-9]+(\.[0-9]+){1,3}([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Unsupported composer version: $version" >&2
+            exit 1
+          fi
+
+          tag="v${version}"
+          publish=false
+
+          if [[ "$EVENT_NAME" == "push" ]]; then
+            previous_version=""
+            if [[ -n "$BEFORE_SHA" && ! "$BEFORE_SHA" =~ ^0+$ ]]; then
+              previous_version="$(
+                git show "${BEFORE_SHA}:composer.json" 2>/dev/null \
+                  | jq -er '.version' 2>/dev/null \
+                  || true
+              )"
+            fi
+
+            if [[ "$previous_version" == "$version" ]]; then
+              echo "Composer version remains ${version}; release publication is skipped."
+            else
+              if git show-ref --verify --quiet "refs/tags/${tag}" \
+                || gh release view "$tag" >/dev/null 2>&1; then
+                echo "Release ${tag} already exists and is immutable." >&2
+                echo "Increment composer.json version before publishing again." >&2
+                exit 1
+              fi
+              publish=true
+            fi
+          else
+            echo "Manual runs verify the release without publishing it."
+          fi
+
+          echo "publish=${publish}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
   verify-release:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -33,15 +93,6 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-
-      - name: Resolve release version
-        run: |
-          version="$(jq -er '.version' composer.json)"
-          if [[ ! "$version" =~ ^[0-9]+(\.[0-9]+){1,3}([-+][0-9A-Za-z.-]+)?$ ]]; then
-            echo "Unsupported composer version: $version" >&2
-            exit 1
-          fi
-          echo "EXTENSION_MESH_TAG=v${version}" >> "$GITHUB_ENV"
 
       - name: Configure PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
@@ -136,8 +187,9 @@ jobs:
         run: docker compose down --volumes --remove-orphans
 
   publish-current-repository:
-    if: github.event_name == 'push' && github.ref_name == 'main'
+    if: needs.release-context.outputs.publish == 'true'
     needs:
+      - release-context
       - verify-release
       - integration-release
     runs-on: ubuntu-latest
@@ -151,19 +203,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Read extension version
-        id: extension
-        shell: bash
-        run: |
-          version="$(jq -er '.version' composer.json)"
-          if [[ ! "$version" =~ ^[0-9]+(\.[0-9]+){1,3}([-+][0-9A-Za-z.-]+)?$ ]]; then
-            echo "Unsupported composer version: $version" >&2
-            exit 1
-          fi
-
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
-
       - name: Download the verified release artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -172,14 +211,16 @@ jobs:
 
       - name: Build and publish the compatible package
         env:
-          EXTENSION_MESH_TAG: ${{ steps.extension.outputs.tag }}
-        uses: Extension-Mesh/shopware-publisher@ddc9b3590a8502679fcffc3fd24f82fd5c68ec88
+          EXTENSION_MESH_TAG: ${{ needs.release-context.outputs.tag }}
+        uses: Extension-Mesh/shopware-publisher@1355c834bb904a01205ff46cc16a81461c3ce4b6
+        with:
+          source-archive: ${{ runner.temp }}/verified-extension/ExtensionMesh-${{ github.sha }}.zip
 
       - name: Confirm the published ZIP is the verified artifact
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ steps.extension.outputs.tag }}
+          RELEASE_TAG: ${{ needs.release-context.outputs.tag }}
         run: |
           mkdir -p "$RUNNER_TEMP/published-extension"
           gh release download "$RELEASE_TAG" \
@@ -191,6 +232,17 @@ jobs:
           mapfile -d '' published < <(
             find "$RUNNER_TEMP/published-extension" -maxdepth 1 -type f -name '*.zip' -print0
           )
-          test "${#verified[@]}" -eq 1
-          test "${#published[@]}" -eq 1
-          cmp --silent "${verified[0]}" "${published[0]}"
+          if [[ "${#verified[@]}" -ne 1 || "${#published[@]}" -ne 1 ]]; then
+            echo "Expected one verified and one published ZIP; found ${#verified[@]} and ${#published[@]}." >&2
+            exit 1
+          fi
+
+          verified_sha="$(sha256sum "${verified[0]}" | cut -d ' ' -f 1)"
+          published_sha="$(sha256sum "${published[0]}" | cut -d ' ' -f 1)"
+          echo "Verified ZIP SHA-256:  ${verified_sha}"
+          echo "Published ZIP SHA-256: ${published_sha}"
+          if [[ "$verified_sha" != "$published_sha" ]] \
+            || ! cmp --silent "${verified[0]}" "${published[0]}"; then
+            echo "Published ZIP differs from the verified release artifact." >&2
+            exit 1
+          fi
