@@ -4,8 +4,9 @@ ExtensionMesh is an open-source connector for extension registries in Shopware
 6.7. It adds registry sources to the Administration and uses the native plugin
 lifecycle for installation and updates.
 
-> **Project status:** Pre-release. Evaluate the connector in an isolated
-> environment before using it in production.
+> **Project status:** Public beta. Version `0.1.0-beta.1` is available for
+> broader evaluation on Shopware 6.7. Review the current boundaries before
+> using it in production.
 
 ## Current capabilities
 
@@ -104,8 +105,8 @@ builds a validated plugin ZIP and publishes the ZIP, checksum and ExtensionMesh
 registry metadata with a GitHub Release. On every release it also updates a
 generated registry channel, so consumers can keep using the repository URL
 instead of a version-specific asset URL. See
-[Publishing from GitHub](docs/github-publishing.md) for a minimal workflow and
-the current alpha limitations.
+[Publishing from GitHub](docs/github-publishing.md) for complete publishing
+options and ways to integrate it with an existing release flow.
 
 ## Development checks
 
