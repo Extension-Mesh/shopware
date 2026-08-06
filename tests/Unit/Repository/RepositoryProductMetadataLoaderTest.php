@@ -118,6 +118,11 @@ final class RepositoryProductMetadataLoaderTest extends TestCase
                           icon: src/Resources/store/icon.png
                           default_locale: de_DE
                           image_directory: src/Resources/store/images
+                          availabilities: [German, International]
+                          localizations: [de_DE, en_GB]
+                          categories: [StorefrontDetailanpassungen]
+                          type: extension
+                          automatic_bugfix_version_compatibility: true
                           meta_title:
                             de: Beispiel Erweiterung – Mehr verkaufen
                             en: Example Extension - Sell more
@@ -130,6 +135,31 @@ final class RepositoryProductMetadataLoaderTest extends TestCase
                           tags:
                             de: [Checkout, Conversion]
                             en: [checkout, conversion]
+                          installation_manual:
+                            de: <p>Installationsanleitung</p>
+                            en: <p>Installation guide</p>
+                          highlights:
+                            de: [Erstes Highlight]
+                            en: [First highlight]
+                          features:
+                            de: [Erstes Feature]
+                            en: [First feature]
+                          faq:
+                            de:
+                              - question: Eine Frage?
+                                answer: Eine Antwort.
+                                position: 1
+                          images:
+                            - file: de/2.jpg
+                              activate: { de: true, en: false }
+                              preview: { de: false, en: false }
+                              priority: 2
+                            - file: de/1.png
+                              activate: { de: true, en: true }
+                              preview: { de: true, en: true }
+                              priority: 1
+                          future_store_information:
+                            nested: [is, retained, unchanged]
                         YAML,
                     'src/Resources/store/description.de.html' => '<p>Sichere Beschreibung</p>',
                     default => null,
@@ -143,13 +173,7 @@ final class RepositoryProductMetadataLoaderTest extends TestCase
                 string $path,
                 string $reference
             ): array {
-                return $path === 'src/Resources/store/images/de'
-                    ? [
-                        ['path' => $path . '/1.png', 'size' => 100],
-                        ['path' => $path . '/2.jpg', 'size' => 100],
-                        ['path' => $path . '/notes.txt', 'size' => 100],
-                    ]
-                    : [];
+                throw new \LogicException('The explicit image list must be used.');
             }
 
             public function downloadAsset(string $apiBaseUrl, string $credential, array $asset): string
@@ -175,5 +199,26 @@ final class RepositoryProductMetadataLoaderTest extends TestCase
             'src/Resources/store/images/de/1.png',
             'src/Resources/store/images/de/2.jpg',
         ], $metadata['imagePaths']);
+        self::assertSame(['German', 'International'], $metadata['store']['availabilities']);
+        self::assertTrue($metadata['store']['automatic_bugfix_version_compatibility']);
+        self::assertSame(
+            '<p>Installation guide</p>',
+            $metadata['store']['installation_manual']['en']
+        );
+        self::assertSame(['First highlight'], $metadata['store']['highlights']['en']);
+        self::assertSame(['First feature'], $metadata['store']['features']['en']);
+        self::assertSame('Eine Antwort.', $metadata['store']['faq']['de'][0]['answer']);
+        self::assertSame(
+            ['de' => true, 'en' => true],
+            $metadata['store']['images'][1]['preview']
+        );
+        self::assertSame(
+            ['nested' => ['is', 'retained', 'unchanged']],
+            $metadata['store']['future_store_information']
+        );
+        self::assertSame(
+            'file:src/Resources/store/description.de.html',
+            $metadata['store']['description']['de']
+        );
     }
 }

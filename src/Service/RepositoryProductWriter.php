@@ -21,6 +21,8 @@ use Shopware\Core\System\Tax\TaxEntity;
 
 final class RepositoryProductWriter
 {
+    private const STORE_METADATA_CUSTOM_FIELD = 'extension_mesh_store_metadata';
+
     public function __construct(
         /** @var EntityRepository<ProductCollection> */
         private readonly EntityRepository $productRepository,
@@ -88,6 +90,12 @@ final class RepositoryProductWriter
 
         $productId ??= Uuid::randomHex();
         $systemTranslation = $translations[Defaults::LANGUAGE_SYSTEM];
+        $storeMetadata = $metadata['store'] ?? null;
+        if (\is_array($storeMetadata) && $storeMetadata !== []) {
+            $systemTranslation['customFields'] = [
+                self::STORE_METADATA_CUSTOM_FIELD => $storeMetadata,
+            ];
+        }
         $additionalTranslations = $translations;
         unset($additionalTranslations[Defaults::LANGUAGE_SYSTEM]);
         $payload = [
@@ -201,6 +209,17 @@ final class RepositoryProductWriter
             'id' => $productId,
             'type' => ProductDefinition::TYPE_DIGITAL,
             'shippingFree' => true,
+        ]], $context);
+    }
+
+    /** @param array<string, mixed> $storeMetadata */
+    public function updateStoreMetadata(string $productId, array $storeMetadata, Context $context): void
+    {
+        $this->productRepository->update([[
+            'id' => $productId,
+            'customFields' => [
+                self::STORE_METADATA_CUSTOM_FIELD => $storeMetadata,
+            ],
         ]], $context);
     }
 

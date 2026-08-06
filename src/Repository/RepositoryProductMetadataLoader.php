@@ -24,7 +24,8 @@ final class RepositoryProductMetadataLoader
      *     metaDescriptions: array<string, string>,
      *     keywords: array<string, string>,
      *     iconPath: ?string,
-     *     imagePaths: list<string>
+     *     imagePaths: list<string>,
+     *     store: array<string, mixed>
      * }
      */
     public function load(
@@ -119,6 +120,7 @@ final class RepositoryProductMetadataLoader
             'keywords' => $keywords,
             'iconPath' => $iconPath,
             'imagePaths' => $imagePaths,
+            'store' => $store,
         ];
     }
 
@@ -131,7 +133,8 @@ final class RepositoryProductMetadataLoader
      *     metaDescriptions: array<string, string>,
      *     keywords: array<string, string>,
      *     iconPath: null,
-     *     imagePaths: list<string>
+     *     imagePaths: list<string>,
+     *     store: array<string, mixed>
      * }
      */
     private function empty(): array
@@ -145,6 +148,7 @@ final class RepositoryProductMetadataLoader
             'keywords' => [],
             'iconPath' => null,
             'imagePaths' => [],
+            'store' => [],
         ];
     }
 
@@ -162,10 +166,43 @@ final class RepositoryProductMetadataLoader
         string $reference
     ): array {
         $directory = $store['image_directory'] ?? null;
-        if (!\is_string($directory) || \trim($directory) === '') {
+        if (\is_string($directory) && \trim($directory) !== '') {
+            $directory = $this->path($directory);
+        } else {
+            $directory = null;
+        }
+
+        if (\is_array($store['images'] ?? null)) {
+            $images = [];
+            foreach ($store['images'] as $position => $image) {
+                if (!\is_array($image) || !\is_string($image['file'] ?? null)) {
+                    continue;
+                }
+                $file = $this->path($image['file']);
+                $path = $directory === null ? $file : $directory . '/' . $file;
+                if (!\preg_match('/\.(?:png|jpe?g|webp)$/iD', $path)) {
+                    continue;
+                }
+                $images[] = [
+                    'path' => $path,
+                    'priority' => \is_int($image['priority'] ?? null)
+                        ? $image['priority']
+                        : \PHP_INT_MAX,
+                    'position' => $position,
+                ];
+            }
+            \usort($images, static function (array $left, array $right): int {
+                $priority = $left['priority'] <=> $right['priority'];
+
+                return $priority !== 0 ? $priority : $left['position'] <=> $right['position'];
+            });
+
+            return \array_slice(\array_values(\array_unique(\array_column($images, 'path'))), 0, 8);
+        }
+
+        if ($directory === null) {
             return [];
         }
-        $directory = $this->path($directory);
         $defaultLocale = \is_string($store['default_locale'] ?? null)
             ? $this->locale($store['default_locale'])
             : 'en-GB';

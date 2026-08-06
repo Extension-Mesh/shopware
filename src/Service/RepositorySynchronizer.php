@@ -4,6 +4,7 @@ namespace ExtensionMesh\Shopware\Service;
 
 use ExtensionMesh\Shopware\Exception\ExtensionMeshException;
 use ExtensionMesh\Shopware\Infrastructure\Persistence\RepositoryConnectionRepository;
+use ExtensionMesh\Shopware\Repository\RepositoryProductMetadataLoader;
 use ExtensionMesh\Shopware\Repository\RepositoryProvider;
 use ExtensionMesh\Shopware\Repository\RepositoryProviderRegistry;
 use Shopware\Core\Content\Media\File\FileSaver;
@@ -22,6 +23,7 @@ final class RepositorySynchronizer
         private readonly RepositoryCredentialService $credentials,
         private readonly PluginArchiveInspector $inspector,
         private readonly RepositoryProductWriter $products,
+        private readonly RepositoryProductMetadataLoader $metadata,
         /** @var EntityRepository<MediaCollection> */
         private readonly EntityRepository $mediaRepository,
         /** @var EntityRepository<ProductDownloadCollection> */
@@ -203,6 +205,16 @@ final class RepositorySynchronizer
 
         $credential = $this->credentials->resolve($connection);
         $provider = $this->providers->get((string) $connection['provider']);
+        if ($offset === 0 && \is_string($connection['defaultBranch'] ?? null)) {
+            $metadata = $this->metadata->load(
+                $provider,
+                (string) $connection['repository'],
+                (string) $connection['apiBaseUrl'],
+                $credential,
+                $connection['defaultBranch']
+            );
+            $this->products->updateStoreMetadata($productId, $metadata['store'], $context);
+        }
         $releases = \array_reverse($provider->releases(
             (string) $connection['repository'],
             (string) $connection['apiBaseUrl'],
