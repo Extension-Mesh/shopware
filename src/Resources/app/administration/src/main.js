@@ -1,4 +1,5 @@
 import './service/extension-mesh-api.service';
+import './component/extension-mesh-credential-select';
 import './acl';
 import './module/extension-mesh';
 import './module/extension-mesh-entitlement';

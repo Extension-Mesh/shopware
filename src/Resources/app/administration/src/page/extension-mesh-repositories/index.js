@@ -19,6 +19,7 @@ Component.register('extension-mesh-repositories', {
             repositoryLimit: 10,
             repositoryTotal: 0,
             providers: [],
+            credentials: [],
             publication: [],
             publicationPage: 1,
             publicationLimit: 10,
@@ -28,11 +29,18 @@ Component.register('extension-mesh-repositories', {
             repositoryName: '',
             apiBaseUrl: 'https://api.github.com',
             showCustomApiBaseUrl: false,
+            repositoryCredentialId: '',
             repositoryToken: '',
             mode: 'import',
             productId: null,
             credentialRepositoryId: null,
+            credentialProvider: '',
+            credentialApiBaseUrl: '',
+            credentialId: '',
             credentialToken: '',
+            rotateCredentialId: null,
+            rotationToken: '',
+            deleteCredentialId: null,
             unlinkRepositoryId: null,
             repositoryPollTimer: null,
         };
@@ -150,13 +158,15 @@ Component.register('extension-mesh-repositories', {
             this.error = null;
 
             try {
-                const [repositories, publication, providers] = await Promise.all([
+                const [repositories, publication, providers, credentials] = await Promise.all([
                     this.fetchRepositoryPage(),
                     this.fetchPublicationPage(),
                     this.extensionMeshApiService.getRepositoryProviders(),
+                    this.extensionMeshApiService.getRepositoryCredentials(),
                 ]);
                 this.applyRepositoryPage(repositories);
                 this.providers = providers;
+                this.credentials = credentials;
                 this.applyPublicationPage(publication);
                 this.publicationPaths = {
                     registry: '/extension-mesh/v1/registry',
@@ -244,6 +254,7 @@ Component.register('extension-mesh-repositories', {
                     apiBaseUrl: this.apiBaseUrl.trim()
                         || this.selectedProvider()?.defaultApiBaseUrl
                         || '',
+                    credentialId: this.selectedCredentialId(this.repositoryCredentialId),
                     accessToken: this.repositoryToken.trim(),
                     mode: this.mode,
                     productId: this.mode === 'link' ? this.productId : null,
@@ -306,13 +317,19 @@ Component.register('extension-mesh-repositories', {
             }
         },
 
-        editCredential(id) {
-            this.credentialRepositoryId = id;
+        editCredential(repository) {
+            this.credentialRepositoryId = repository.id;
+            this.credentialProvider = repository.provider;
+            this.credentialApiBaseUrl = repository.apiBaseUrl;
+            this.credentialId = repository.credentialId || '';
             this.credentialToken = '';
         },
 
         cancelCredential() {
             this.credentialRepositoryId = null;
+            this.credentialProvider = '';
+            this.credentialApiBaseUrl = '';
+            this.credentialId = '';
             this.credentialToken = '';
         },
 
@@ -321,8 +338,65 @@ Component.register('extension-mesh-repositories', {
                 await this.extensionMeshApiService.updateSellerRepositoryCredential(
                     id,
                     this.credentialToken.trim(),
+                    this.selectedCredentialId(this.credentialId),
                 );
                 this.cancelCredential();
+                await this.loadRepositories();
+            });
+        },
+
+        editSavedCredential(id) {
+            this.rotateCredentialId = id;
+            this.rotationToken = '';
+        },
+
+        cancelSavedCredential() {
+            this.rotateCredentialId = null;
+            this.rotationToken = '';
+        },
+
+        async saveSavedCredential(id) {
+            if (!this.validateCredential(this.rotationToken)) return;
+
+            await this.withLoading(async () => {
+                const credential = await this.extensionMeshApiService.updateRepositoryCredential(
+                    id,
+                    this.rotationToken.trim(),
+                );
+                if (this.repositoryCredentialId === id) {
+                    this.repositoryCredentialId = credential.id;
+                }
+                if (this.credentialId === id) {
+                    this.credentialId = credential.id;
+                }
+                this.cancelSavedCredential();
+                await this.loadRepositories();
+            });
+        },
+
+        requestDeleteCredential(id) {
+            this.deleteCredentialId = id;
+        },
+
+        cancelDeleteCredential() {
+            this.deleteCredentialId = null;
+        },
+
+        async deleteSavedCredential() {
+            const id = this.deleteCredentialId;
+            if (!id) return;
+
+            await this.withLoading(async () => {
+                await this.extensionMeshApiService.deleteRepositoryCredential(id);
+                if (this.repositoryCredentialId === id) {
+                    this.repositoryCredentialId = '';
+                    this.repositoryToken = '';
+                }
+                if (this.credentialId === id) {
+                    this.credentialId = '';
+                    this.credentialToken = '';
+                }
+                this.cancelDeleteCredential();
                 await this.loadRepositories();
             });
         },
@@ -350,6 +424,7 @@ Component.register('extension-mesh-repositories', {
         resetForm() {
             this.provider = this.providers[0]?.key || 'github';
             this.repositoryName = '';
+            this.repositoryCredentialId = '';
             this.repositoryToken = '';
             this.mode = 'import';
             this.productId = null;
@@ -364,9 +439,47 @@ Component.register('extension-mesh-repositories', {
 
         setApiBaseUrl(providerKey = this.provider) {
             this.showCustomApiBaseUrl = false;
+            this.repositoryCredentialId = '';
             this.apiBaseUrl = this.providers.find(
                 (provider) => provider.key === providerKey,
             )?.defaultApiBaseUrl || '';
+        },
+
+        credentialOptions(provider, apiBaseUrl, newToken = '') {
+            const normalizedApiBaseUrl = String(apiBaseUrl || '').trim().replace(/\/+$/, '');
+
+            return [
+                {
+                    value: '',
+                    label: this.$t('extension-mesh.repositories.noToken'),
+                },
+                ...this.credentials
+                    .filter((credential) => credential.provider === provider
+                        && credential.apiBaseUrl === normalizedApiBaseUrl)
+                    .map((credential) => ({
+                        value: credential.id,
+                        label: this.$t('extension-mesh.repositories.savedToken', {
+                            fingerprint: credential.credentialFingerprint,
+                        }),
+                    })),
+                ...(newToken ? [{
+                    value: '__new__',
+                    label: this.$t('extension-mesh.repositories.newTokenSelected', {
+                        suffix: newToken.slice(-4),
+                    }),
+                    isNew: true,
+                }] : []),
+            ];
+        },
+
+        validateCredential(value) {
+            return value.length > 0
+                && value.length <= 1024
+                && !/[\x00-\x20\x7f]/.test(value);
+        },
+
+        selectedCredentialId(value) {
+            return value && value !== '__new__' ? value : null;
         },
 
         async withLoading(callback) {

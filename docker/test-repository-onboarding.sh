@@ -175,6 +175,7 @@ curl -fsS -X POST \
     || fail 'repository pagination metadata or page size is invalid'
 
 connection_id=$(jq -er '.data.id' "${temporary_dir}/import.json")
+original_credential_id=$(jq -er '.data.credentialId' "${temporary_dir}/import.json")
 wait_for_repository "${connection_id}" "${temporary_dir}/import-ready.json"
 jq -e '
     .repositoryPrivate == true
@@ -299,12 +300,28 @@ expect_status 200 "${temporary_dir}/rotated-token.json" \
 jq -e '.data.credentialFingerprint | length == 12' \
     "${temporary_dir}/rotated-token.json" >/dev/null \
     || fail 'the repository credential was not replaced'
+credential_id=$(jq -er '.data.credentialId' "${temporary_dir}/rotated-token.json")
+curl -fsS "${seller_api}/_action/extension-mesh/repositories/credentials" \
+    -H "${auth_header}" \
+    | jq -e --arg credentialId "${credential_id}" '.data[] | select(
+        .id == $credentialId
+        and .provider == "github"
+        and .apiBaseUrl == "http://registry/github-api"
+        and (.credentialFingerprint | length) == 12
+        and .connectionCount == 1
+        and (has("credentialCiphertext") | not)
+    )' >/dev/null \
+    || fail 'the reusable repository credential is unavailable or leaks its token'
 
 expect_status 204 "${temporary_dir}/unlink.json" \
     -X DELETE "${seller_api}/_action/extension-mesh/repositories/${connection_id}" \
     -H "${auth_header}"
 expect_status 200 "${temporary_dir}/preserved-product.json" \
     "${seller_api}/product/${product_id}" \
+    -H "${auth_header}"
+
+expect_status 204 "${temporary_dir}/delete-unused-credential.json" \
+    -X DELETE "${seller_api}/_action/extension-mesh/repositories/credentials/${original_credential_id}" \
     -H "${auth_header}"
 
 tax_id=$(curl -fsS "${seller_api}/tax?limit=1" -H "${auth_header}" | jq -er '.data[0].id')
@@ -330,11 +347,12 @@ expect_status 204 "${temporary_dir}/create-linked-product.json" \
 
 link_payload=$(jq -nc \
     --arg productId "${linked_product_id}" \
+    --arg credentialId "${credential_id}" \
     '{
         provider: "github",
         repository: "acme/private-plugin",
         apiBaseUrl: "http://registry/github-api",
-        accessToken: "rotated-private-repo-token",
+        credentialId: $credentialId,
         mode: "link",
         productId: $productId
     }')
@@ -351,11 +369,58 @@ jq -e '
 linked_connection_id=$(jq -er '.data.id' "${temporary_dir}/link.json")
 wait_for_repository "${linked_connection_id}" "${temporary_dir}/link-ready.json"
 
+previous_fingerprint=$(jq -er '.data.credentialFingerprint' "${temporary_dir}/rotated-token.json")
+expect_status 200 "${temporary_dir}/rotate-shared-credential.json" \
+    -X PUT "${seller_api}/_action/extension-mesh/repositories/credentials/${credential_id}" \
+    -H "${auth_header}" \
+    -H 'Content-Type: application/json' \
+    --data '{"accessToken":"private-repo-token"}'
+jq -e \
+    --arg credentialId "${credential_id}" \
+    --arg previousFingerprint "${previous_fingerprint}" '
+        .data.id == $credentialId
+        and .data.connectionCount == 1
+        and (.data.credentialFingerprint | length) == 12
+        and .data.credentialFingerprint != $previousFingerprint
+        and (has("credentialCiphertext") | not)
+    ' "${temporary_dir}/rotate-shared-credential.json" >/dev/null \
+    || fail 'the shared repository credential was not rotated in place'
+curl -fsS -X POST \
+    "${seller_api}/search/extension-mesh-repository-connection" \
+    -H "${auth_header}" \
+    -H 'Content-Type: application/json' \
+    --data '{"ids":["'"${linked_connection_id}"'"],"associations":{"credential":{}}}' \
+    | jq -e --arg credentialId "${credential_id}" '
+        .data[0].relationships.credential.data.id == $credentialId
+        and .data[0].attributes.credentialId == $credentialId
+    ' >/dev/null \
+    || fail 'rotating a shared credential reconfigured its linked repository'
+
 expect_status 200 "${temporary_dir}/linked-product.json" \
     "${seller_api}/product/${linked_product_id}" \
     -H "${auth_header}"
 jq -e '.data.attributes.type == "digital"' "${temporary_dir}/linked-product.json" >/dev/null \
     || fail 'the linked product was not made digital after importing releases'
+
+expect_status 204 "${temporary_dir}/delete-shared-credential.json" \
+    -X DELETE "${seller_api}/_action/extension-mesh/repositories/credentials/${credential_id}" \
+    -H "${auth_header}"
+curl -fsS -X POST \
+    "${seller_api}/search/extension-mesh-repository-connection" \
+    -H "${auth_header}" \
+    -H 'Content-Type: application/json' \
+    --data '{"ids":["'"${linked_connection_id}"'"],"associations":{"credential":{}}}' \
+    | jq -e '
+        .data[0].relationships.credential.data == null
+        and .data[0].attributes.credentialId == null
+    ' >/dev/null \
+    || fail 'deleting a shared credential did not detach its linked repository'
+curl -fsS "${seller_api}/_action/extension-mesh/repositories/credentials" \
+    -H "${auth_header}" \
+    | jq -e --arg credentialId "${credential_id}" '
+        [.data[] | select(.id == $credentialId)] | length == 0
+    ' >/dev/null \
+    || fail 'the deleted shared credential is still available'
 
 expect_status 204 "${temporary_dir}/unlink-linked.json" \
     -X DELETE "${seller_api}/_action/extension-mesh/repositories/${linked_connection_id}" \
@@ -371,4 +436,4 @@ expect_status 204 "${temporary_dir}/delete-linked-product.json" \
     -X DELETE "${seller_api}/product/${linked_product_id}" \
     -H "${auth_header}"
 
-echo "Repository import, scheduled sync, credential replacement and product linking passed."
+echo "Repository import, shared credential rotation/deletion and product linking passed."

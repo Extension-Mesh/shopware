@@ -203,6 +203,13 @@ services:
             $connections: '@extension_mesh_repository_connection.repository'
             $releases: '@extension_mesh_repository_release.repository'
 
+    ExtensionMesh\Shopware\Infrastructure\Persistence\RepositoryCredentialRepository:
+        arguments:
+            $repository: '@extension_mesh_repository_credential.repository'
+
+    ExtensionMesh\Shopware\Service\RepositoryCredentialStore:
+        alias: ExtensionMesh\Shopware\Infrastructure\Persistence\RepositoryCredentialRepository
+
     ExtensionMesh\Shopware\Infrastructure\Persistence\PublicationRepository:
         arguments:
             $releases: '@extension_mesh_published_release.repository'

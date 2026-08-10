@@ -2,6 +2,7 @@
 
 namespace ExtensionMesh\Shopware\Core\Content\RepositoryConnection;
 
+use ExtensionMesh\Shopware\Core\Content\RepositoryCredential\RepositoryCredentialEntity;
 use ExtensionMesh\Shopware\Core\Content\RepositoryRelease\RepositoryReleaseCollection;
 use Shopware\Core\Content\Product\ProductEntity;
 use Shopware\Core\Framework\DataAbstractionLayer\Entity;
@@ -17,8 +18,7 @@ final class RepositoryConnectionEntity extends Entity
     protected ?string $webUrl = null;
     protected ?string $defaultBranch = null;
     protected bool $repositoryPrivate;
-    protected ?string $credentialCiphertext = null;
-    protected ?string $credentialFingerprint = null;
+    protected ?string $credentialId = null;
     protected ?string $productId = null;
     protected ?string $productVersionId = null;
     protected ?string $technicalName = null;
@@ -29,6 +29,7 @@ final class RepositoryConnectionEntity extends Entity
     protected bool $enabled;
     protected ?\DateTimeInterface $lastSyncedAt = null;
     protected ?string $lastError = null;
+    protected ?RepositoryCredentialEntity $credential = null;
     protected ?ProductEntity $product = null;
     protected ?RepositoryReleaseCollection $releases = null;
 
@@ -92,24 +93,24 @@ final class RepositoryConnectionEntity extends Entity
         $this->repositoryPrivate = $value;
     }
 
-    public function getCredentialCiphertext(): ?string
+    public function getCredentialId(): ?string
     {
-        return $this->credentialCiphertext;
+        return $this->credentialId;
     }
 
-    public function setCredentialCiphertext(?string $value): void
+    public function setCredentialId(?string $value): void
     {
-        $this->credentialCiphertext = $value;
+        $this->credentialId = $value;
     }
 
-    public function getCredentialFingerprint(): ?string
+    public function getCredential(): ?RepositoryCredentialEntity
     {
-        return $this->credentialFingerprint;
+        return $this->credential;
     }
 
-    public function setCredentialFingerprint(?string $value): void
+    public function setCredential(?RepositoryCredentialEntity $value): void
     {
-        $this->credentialFingerprint = $value;
+        $this->credential = $value;
     }
 
     public function getProductId(): ?string

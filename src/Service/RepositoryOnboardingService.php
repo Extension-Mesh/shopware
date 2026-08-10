@@ -4,7 +4,6 @@ namespace ExtensionMesh\Shopware\Service;
 
 use ExtensionMesh\Shopware\Exception\ExtensionMeshException;
 use ExtensionMesh\Shopware\Infrastructure\Persistence\RepositoryConnectionRepository;
-use ExtensionMesh\Shopware\Infrastructure\Security\CredentialCipher;
 use ExtensionMesh\Shopware\Message\RepositoryProcessMessage;
 use ExtensionMesh\Shopware\Repository\RepositoryProductMetadataLoader;
 use ExtensionMesh\Shopware\Repository\RepositoryProviderRegistry;
@@ -20,7 +19,6 @@ final class RepositoryOnboardingService
         private readonly RepositorySynchronizer $synchronizer,
         private readonly RepositoryProductWriter $products,
         private readonly RepositoryCredentialService $credentials,
-        private readonly CredentialCipher $cipher,
         private readonly MessageBusInterface $messageBus
     ) {
     }
@@ -33,6 +31,63 @@ final class RepositoryOnboardingService
         return $this->providers->descriptors();
     }
 
+    /** @return list<array{id: string, provider: string, apiBaseUrl: string, credentialFingerprint: string, connectionCount: int}> */
+    public function credentials(Context $context): array
+    {
+        return $this->credentials->available($context);
+    }
+
+    /** @return array{id: string, provider: string, apiBaseUrl: string, credentialFingerprint: string, connectionCount: int} */
+    public function rotateCredential(string $credentialId, string $credential, Context $context): array
+    {
+        $stored = $this->credentials->get($credentialId, $context);
+        $credential = $this->credential($credential);
+        if ($credential === '') {
+            throw ExtensionMeshException::invalidRepository(
+                'a replacement provider token is required.'
+            );
+        }
+
+        $connections = $this->connections->allByCredential($credentialId, $context);
+        $provider = $this->providers->get((string) $stored['provider']);
+        foreach ($connections as $connection) {
+            $provider->inspect(
+                (string) $connection['repository'],
+                (string) $connection['apiBaseUrl'],
+                $credential
+            );
+        }
+
+        $matchingId = $this->credentials->findIdForToken(
+            (string) $stored['provider'],
+            (string) $stored['apiBaseUrl'],
+            $credential,
+            $context
+        );
+        if ($matchingId !== null && $matchingId !== $credentialId) {
+            $this->connections->replaceCredential($credentialId, $matchingId, $context);
+            $this->credentials->delete($credentialId, $context);
+            $credentialId = $matchingId;
+        } else {
+            $this->credentials->update($credentialId, $credential, $context);
+        }
+
+        foreach ($this->credentials->available($context) as $available) {
+            if ($available['id'] === $credentialId) {
+                return $available;
+            }
+        }
+
+        throw ExtensionMeshException::repositoryCredentialNotFound($credentialId);
+    }
+
+    public function deleteCredential(string $credentialId, Context $context): void
+    {
+        $this->credentials->get($credentialId, $context);
+        $this->connections->replaceCredential($credentialId, null, $context);
+        $this->credentials->delete($credentialId, $context);
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -41,6 +96,7 @@ final class RepositoryOnboardingService
         string $repository,
         string $apiBaseUrl,
         string $credential,
+        ?string $credentialId,
         string $mode,
         ?string $productId,
         Context $context
@@ -74,12 +130,19 @@ final class RepositoryOnboardingService
             throw ExtensionMeshException::invalidRepository('this repository is already connected.');
         }
 
+        $credentialId = $this->credentials->select(
+            $provider->key(),
+            $apiBaseUrl,
+            $credentialId,
+            $credential,
+            $context
+        );
+
         $id = $this->connections->createQueued(
             $provider->key(),
             $repository,
             $apiBaseUrl,
-            $credential === '' ? null : $this->cipher->encrypt($credential),
-            $credential === '' ? null : $this->cipher->fingerprint($credential),
+            $credentialId,
             $productId,
             $mode,
             $context
@@ -314,22 +377,48 @@ final class RepositoryOnboardingService
     /**
      * @return array<string, mixed>
      */
-    public function updateCredential(string $id, string $credential, Context $context): array
+    public function updateCredential(
+        string $id,
+        string $credential,
+        ?string $credentialId,
+        Context $context
+    ): array
     {
         $connection = $this->connections->get($id, $context);
         if ($connection === null) {
             throw ExtensionMeshException::repositoryNotFound($id);
         }
         $credential = $this->credential($credential);
+        $selected = $credential;
+        if ($selected === '') {
+            $credentialId = $this->credentials->select(
+                (string) $connection['provider'],
+                (string) $connection['apiBaseUrl'],
+                $credentialId,
+                '',
+                $context
+            );
+            if ($credentialId !== null) {
+                $selected = $this->credentials->resolveId($credentialId, $context);
+            }
+        }
         $this->providers->get((string) $connection['provider'])->inspect(
             (string) $connection['repository'],
             (string) $connection['apiBaseUrl'],
-            $credential
+            $selected
         );
+        if ($credential !== '') {
+            $credentialId = $this->credentials->select(
+                (string) $connection['provider'],
+                (string) $connection['apiBaseUrl'],
+                $credentialId,
+                $credential,
+                $context
+            );
+        }
         $this->connections->updateCredential(
             $id,
-            $credential === '' ? null : $this->cipher->encrypt($credential),
-            $credential === '' ? null : $this->cipher->fingerprint($credential),
+            $credentialId,
             $context
         );
 
@@ -377,4 +466,5 @@ final class RepositoryOnboardingService
 
         return $credential;
     }
+
 }

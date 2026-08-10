@@ -28,7 +28,9 @@ final class RepositoryConnectionRepository
     /** @return list<array<string, mixed>> */
     public function all(bool $enabledOnly, Context $context): array
     {
-        $criteria = (new Criteria())->addSorting(new FieldSorting('createdAt'));
+        $criteria = (new Criteria())
+            ->addAssociation('credential')
+            ->addSorting(new FieldSorting('createdAt'));
         if ($enabledOnly) {
             $criteria->addFilter(new EqualsFilter('enabled', true));
         }
@@ -42,7 +44,8 @@ final class RepositoryConnectionRepository
         if (!Uuid::isValid($id)) {
             return null;
         }
-        $entity = $this->connections->search(new Criteria([$id]), $context)->first();
+        $criteria = (new Criteria([$id]))->addAssociation('credential');
+        $entity = $this->connections->search($criteria, $context)->first();
 
         return $entity instanceof RepositoryConnectionEntity ? $this->hydrate($entity) : null;
     }
@@ -54,8 +57,7 @@ final class RepositoryConnectionRepository
         string $webUrl,
         string $defaultBranch,
         bool $private,
-        ?string $credentialCiphertext,
-        ?string $credentialFingerprint,
+        ?string $credentialId,
         ?string $productId,
         ?string $technicalName,
         ?string $configPath,
@@ -70,8 +72,7 @@ final class RepositoryConnectionRepository
             'webUrl' => $webUrl,
             'defaultBranch' => $defaultBranch,
             'repositoryPrivate' => $private,
-            'credentialCiphertext' => $credentialCiphertext,
-            'credentialFingerprint' => $credentialFingerprint,
+            'credentialId' => $credentialId,
             'productId' => $productId,
             'productVersionId' => $productId === null ? null : Defaults::LIVE_VERSION,
             'technicalName' => $technicalName,
@@ -87,8 +88,7 @@ final class RepositoryConnectionRepository
         string $provider,
         string $repository,
         string $apiBaseUrl,
-        ?string $credentialCiphertext,
-        ?string $credentialFingerprint,
+        ?string $credentialId,
         ?string $productId,
         string $mode,
         Context $context
@@ -99,9 +99,8 @@ final class RepositoryConnectionRepository
             'provider' => $provider,
             'repository' => $repository,
             'apiBaseUrl' => $apiBaseUrl,
-            'repositoryPrivate' => $credentialCiphertext !== null,
-            'credentialCiphertext' => $credentialCiphertext,
-            'credentialFingerprint' => $credentialFingerprint,
+            'repositoryPrivate' => $credentialId !== null,
+            'credentialId' => $credentialId,
             'productId' => $productId,
             'productVersionId' => $productId === null ? null : Defaults::LIVE_VERSION,
             'onboardingMode' => $mode,
@@ -128,9 +127,41 @@ final class RepositoryConnectionRepository
         return $ids !== [];
     }
 
-    public function updateCredential(string $id, ?string $ciphertext, ?string $fingerprint, Context $context): void
+    public function updateCredential(string $id, ?string $credentialId, Context $context): void
     {
-        $this->update($id, ['credentialCiphertext' => $ciphertext, 'credentialFingerprint' => $fingerprint], $context);
+        $this->update($id, ['credentialId' => $credentialId], $context);
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function allByCredential(string $credentialId, Context $context): array
+    {
+        if (!Uuid::isValid($credentialId)) {
+            return [];
+        }
+        $criteria = (new Criteria())
+            ->addAssociation('credential')
+            ->addFilter(new EqualsFilter('credentialId', $credentialId));
+
+        return $this->hydrateMany($this->connections->search($criteria, $context)->getElements());
+    }
+
+    public function replaceCredential(
+        string $credentialId,
+        ?string $replacementId,
+        Context $context
+    ): void {
+        if (!Uuid::isValid($credentialId)) {
+            return;
+        }
+        $criteria = (new Criteria())->addFilter(new EqualsFilter('credentialId', $credentialId));
+        $ids = $this->connections->searchIds($criteria, $context)->getIds();
+        if ($ids === []) {
+            return;
+        }
+        $this->connections->update(\array_map(
+            static fn (string $id): array => ['id' => $id, 'credentialId' => $replacementId],
+            $ids
+        ), $context);
     }
 
     /** @param array{repository: string, apiBaseUrl: string, webUrl: string, defaultBranch: string, private: bool} $inspection */
@@ -330,6 +361,8 @@ final class RepositoryConnectionRepository
     /** @return array<string, mixed> */
     private function hydrate(RepositoryConnectionEntity $entity): array
     {
+        $credential = $entity->getCredential();
+
         return [
             'id' => $entity->getId(),
             'provider' => $entity->getProvider(),
@@ -338,8 +371,9 @@ final class RepositoryConnectionRepository
             'webUrl' => $entity->getWebUrl(),
             'defaultBranch' => $entity->getDefaultBranch(),
             'private' => $entity->isRepositoryPrivate(),
-            'credentialCiphertext' => $entity->getCredentialCiphertext(),
-            'credentialFingerprint' => $entity->getCredentialFingerprint(),
+            'credentialId' => $entity->getCredentialId(),
+            'credentialCiphertext' => $credential?->getCredentialCiphertext(),
+            'credentialFingerprint' => $credential?->getCredentialFingerprint(),
             'productId' => $entity->getProductId(),
             'technicalName' => $entity->getTechnicalName(),
             'configPath' => $entity->getConfigPath(),

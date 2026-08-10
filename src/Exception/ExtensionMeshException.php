@@ -74,4 +74,9 @@ final class ExtensionMeshException extends \RuntimeException
         return new self(\sprintf('Repository connection "%s" was not found.', $id));
     }
 
+    public static function repositoryCredentialNotFound(string $id): self
+    {
+        return new self(\sprintf('Repository credential "%s" was not found.', $id));
+    }
+
 }

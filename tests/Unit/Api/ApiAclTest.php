@@ -45,6 +45,9 @@ final class ApiAclTest extends TestCase
             'system.plugin_maintain',
         ]];
         yield 'repository providers' => [RepositoryController::class, 'providers', ['extension_mesh_repository_connection:read']];
+        yield 'repository credentials' => [RepositoryController::class, 'credentials', ['extension_mesh_repository_connection:read']];
+        yield 'repository credential update' => [RepositoryController::class, 'updateCredential', ['extension_mesh_repository_connection:update']];
+        yield 'repository credential delete' => [RepositoryController::class, 'deleteCredential', ['extension_mesh_repository_connection:update']];
         yield 'repository connect' => [RepositoryController::class, 'connect', ['extension_mesh_repository_connection:create']];
         yield 'repository sync' => [RepositoryController::class, 'synchronize', ['extension_mesh_repository_connection:update']];
         yield 'repository credential' => [RepositoryController::class, 'credential', ['extension_mesh_repository_connection:update']];

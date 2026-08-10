@@ -33,6 +33,57 @@ final class RepositoryController
     }
 
     #[Route(
+        path: '/api/_action/extension-mesh/repositories/credentials',
+        name: 'api.action.extension_mesh.repositories.credentials',
+        methods: [Request::METHOD_GET],
+        defaults: [PlatformRequest::ATTRIBUTE_ACL => ['extension_mesh_repository_connection:read']]
+    )]
+    public function credentials(Context $context): JsonResponse
+    {
+        return new JsonResponse(['data' => $this->onboarding->credentials($context)]);
+    }
+
+    #[Route(
+        path: '/api/_action/extension-mesh/repositories/credentials/{id}',
+        name: 'api.action.extension_mesh.repositories.credentials.update',
+        requirements: ['id' => '[0-9a-f]{32}'],
+        methods: [Request::METHOD_PUT],
+        defaults: [PlatformRequest::ATTRIBUTE_ACL => ['extension_mesh_repository_connection:update']]
+    )]
+    public function updateCredential(string $id, Request $request, Context $context): JsonResponse
+    {
+        try {
+            $data = $this->json($request);
+
+            return new JsonResponse(['data' => $this->onboarding->rotateCredential(
+                $id,
+                $this->string($data, 'accessToken'),
+                $context
+            )]);
+        } catch (ExtensionMeshException|\JsonException $exception) {
+            return $this->error($exception->getMessage());
+        }
+    }
+
+    #[Route(
+        path: '/api/_action/extension-mesh/repositories/credentials/{id}',
+        name: 'api.action.extension_mesh.repositories.credentials.delete',
+        requirements: ['id' => '[0-9a-f]{32}'],
+        methods: [Request::METHOD_DELETE],
+        defaults: [PlatformRequest::ATTRIBUTE_ACL => ['extension_mesh_repository_connection:update']]
+    )]
+    public function deleteCredential(string $id, Context $context): Response
+    {
+        try {
+            $this->onboarding->deleteCredential($id, $context);
+
+            return new Response(status: Response::HTTP_NO_CONTENT);
+        } catch (ExtensionMeshException $exception) {
+            return $this->error($exception->getMessage());
+        }
+    }
+
+    #[Route(
         path: '/api/_action/extension-mesh/repositories',
         name: 'api.action.extension_mesh.repositories.connect',
         methods: [Request::METHOD_POST],
@@ -48,7 +99,8 @@ final class RepositoryController
                     $this->string($data, 'provider', 'github'),
                     $this->string($data, 'repository'),
                     $this->string($data, 'apiBaseUrl', 'https://api.github.com'),
-                    $this->string($data, 'accessToken'),
+                    $this->string($data, 'accessToken', ''),
+                    $this->nullableString($data, 'credentialId'),
                     $this->string($data, 'mode'),
                     \is_string($data['productId'] ?? null) ? $data['productId'] : null,
                     $context
@@ -92,7 +144,8 @@ final class RepositoryController
             return new JsonResponse([
                 'data' => $this->onboarding->updateCredential(
                     $id,
-                    $this->string($data, 'accessToken'),
+                    $this->string($data, 'accessToken', ''),
+                    $this->nullableString($data, 'credentialId'),
                     $context
                 ),
             ]);
@@ -140,6 +193,17 @@ final class RepositoryController
         $value = $data[$key] ?? $default;
         if (!\is_string($value)) {
             throw ExtensionMeshException::invalidRepository(\sprintf('"%s" must be a string.', $key));
+        }
+
+        return $value;
+    }
+
+    /** @param array<string, mixed> $data */
+    private function nullableString(array $data, string $key): ?string
+    {
+        $value = $data[$key] ?? null;
+        if ($value !== null && !\is_string($value)) {
+            throw ExtensionMeshException::invalidRepository(\sprintf('"%s" must be a string or null.', $key));
         }
 
         return $value;

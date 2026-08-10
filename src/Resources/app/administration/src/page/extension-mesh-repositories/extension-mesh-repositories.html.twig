@@ -48,13 +48,18 @@
                 />
 
                 <div class="extension-mesh-field-group">
-                    <mt-text-field
-                        v-model="repositoryToken"
-                        type="password"
+                    <extension-mesh-credential-select
+                        :value="repositoryCredentialId"
+                        :options="credentialOptions(provider, apiBaseUrl, repositoryToken)"
+                        :label="$t('extension-mesh.repositories.savedTokenLabel')"
+                        :help-text="$t('extension-mesh.repositories.savedTokenHelp')"
+                        :placeholder="$t('extension-mesh.repositories.tokenPlaceholder')"
+                        :validate-token="validateCredential"
+                        :add-label="$t('extension-mesh.repositories.addToken')"
                         autocomplete="new-password"
-                        :label="$t('extension-mesh.repositories.tokenLabel')"
-                        :help-text="$t('extension-mesh.repositories.tokenHelp')"
                         :disabled="isLoading"
+                        @update:value="repositoryCredentialId = $event || ''"
+                        @new-token="repositoryToken = $event"
                     />
                 </div>
 
@@ -107,6 +112,61 @@
                     </mt-button>
                 </div>
             </div>
+        </mt-card>
+
+        <mt-card
+            class="extension-mesh-page__card"
+            :title="$t('extension-mesh.repositories.credentialsTitle')"
+        >
+            <div class="extension-mesh-page__header">
+                <p>{{ $t('extension-mesh.repositories.credentialsHelp') }}</p>
+            </div>
+
+            <div
+                v-if="!credentials.length"
+                class="extension-mesh-page__empty"
+            >
+                {{ $t('extension-mesh.repositories.credentialsEmpty') }}
+            </div>
+
+            <template v-else>
+                <div
+                    v-for="savedCredential in credentials"
+                    :key="savedCredential.id"
+                    class="extension-mesh-page__item"
+                >
+                    <div class="extension-mesh-page__item-content">
+                        <strong>{{ $t('extension-mesh.repositories.savedToken', {
+                            fingerprint: savedCredential.credentialFingerprint
+                        }) }}</strong>
+                        <small>{{ savedCredential.provider }} &middot; {{ savedCredential.apiBaseUrl }}</small>
+                        <small>{{ $t('extension-mesh.repositories.credentialUsage', {
+                            count: savedCredential.connectionCount
+                        }) }}</small>
+                    </div>
+                    <div
+                        v-if="canUpdate"
+                        class="extension-mesh-page__item-actions"
+                    >
+                        <mt-button
+                            variant="secondary"
+                            size="small"
+                            :disabled="isLoading"
+                            @click="editSavedCredential(savedCredential.id)"
+                        >
+                            {{ $t('extension-mesh.repositories.rotateToken') }}
+                        </mt-button>
+                        <mt-button
+                            variant="critical"
+                            size="small"
+                            :disabled="isLoading"
+                            @click="requestDeleteCredential(savedCredential.id)"
+                        >
+                            {{ $t('global.default.delete') }}
+                        </mt-button>
+                    </div>
+                </div>
+            </template>
         </mt-card>
 
         <mt-card class="extension-mesh-page__card">
@@ -184,7 +244,7 @@
                     <sw-context-menu-item
                         v-if="canUpdate"
                         :disabled="isLoading"
-                        @click="editCredential(item.id)"
+                        @click="editCredential(item)"
                     >
                         {{ $t('extension-mesh.repositories.changeToken') }}
                     </sw-context-menu-item>
@@ -276,17 +336,87 @@
         </mt-card>
 
         <sw-modal
+            v-if="rotateCredentialId"
+            :title="$t('extension-mesh.repositories.rotateTokenTitle')"
+            variant="small"
+            @modal-close="cancelSavedCredential"
+        >
+            <p>{{ $t('extension-mesh.repositories.rotateTokenHelp') }}</p>
+            <mt-text-field
+                v-model="rotationToken"
+                type="password"
+                autocomplete="new-password"
+                :label="$t('extension-mesh.repositories.replacementToken')"
+                :disabled="isLoading"
+            />
+
+            <template #modal-footer>
+                <mt-button
+                    variant="secondary"
+                    size="small"
+                    :disabled="isLoading"
+                    @click="cancelSavedCredential"
+                >
+                    {{ $t('global.default.cancel') }}
+                </mt-button>
+                <mt-button
+                    variant="primary"
+                    size="small"
+                    :disabled="isLoading || !validateCredential(rotationToken)"
+                    @click="saveSavedCredential(rotateCredentialId)"
+                >
+                    {{ $t('global.default.save') }}
+                </mt-button>
+            </template>
+        </sw-modal>
+
+        <sw-modal
+            v-if="deleteCredentialId"
+            :title="$t('extension-mesh.repositories.deleteTokenTitle')"
+            variant="small"
+            @modal-close="cancelDeleteCredential"
+        >
+            <p>{{ $t('extension-mesh.repositories.deleteTokenConfirm') }}</p>
+            <template #modal-footer>
+                <mt-button
+                    variant="secondary"
+                    :disabled="isLoading"
+                    @click="cancelDeleteCredential"
+                >
+                    {{ $t('global.default.cancel') }}
+                </mt-button>
+                <mt-button
+                    variant="critical"
+                    :disabled="isLoading"
+                    @click="deleteSavedCredential"
+                >
+                    {{ $t('global.default.delete') }}
+                </mt-button>
+            </template>
+        </sw-modal>
+
+        <sw-modal
             v-if="credentialRepositoryId"
             :title="$t('extension-mesh.repositories.changeToken')"
             variant="small"
             @modal-close="cancelCredential"
         >
-            <mt-text-field
-                v-model="credentialToken"
-                type="password"
+            <extension-mesh-credential-select
+                :value="credentialId"
+                :options="credentialOptions(
+                    credentialProvider,
+                    credentialApiBaseUrl,
+                    credentialToken
+                )"
+                :label="$t('extension-mesh.repositories.savedTokenLabel')"
+                :help-text="$t('extension-mesh.repositories.savedTokenHelp')"
+                :placeholder="$t('extension-mesh.repositories.tokenPlaceholder')"
+                :validate-token="validateCredential"
+                :add-label="$t('extension-mesh.repositories.addToken')"
                 autocomplete="new-password"
-                :label="$t('extension-mesh.repositories.newToken')"
                 :disabled="isLoading"
+                @update:value="credentialId = $event || ''"
+                @new-token="credentialToken = $event"
             />
 
             <template #modal-footer>

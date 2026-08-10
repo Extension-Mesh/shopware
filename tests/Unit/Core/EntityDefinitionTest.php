@@ -23,6 +23,9 @@ use ExtensionMesh\Shopware\Core\Content\RegistrySource\RegistrySourceEntity;
 use ExtensionMesh\Shopware\Core\Content\RepositoryConnection\RepositoryConnectionCollection;
 use ExtensionMesh\Shopware\Core\Content\RepositoryConnection\RepositoryConnectionDefinition;
 use ExtensionMesh\Shopware\Core\Content\RepositoryConnection\RepositoryConnectionEntity;
+use ExtensionMesh\Shopware\Core\Content\RepositoryCredential\RepositoryCredentialCollection;
+use ExtensionMesh\Shopware\Core\Content\RepositoryCredential\RepositoryCredentialDefinition;
+use ExtensionMesh\Shopware\Core\Content\RepositoryCredential\RepositoryCredentialEntity;
 use ExtensionMesh\Shopware\Core\Content\RepositoryRelease\RepositoryReleaseCollection;
 use ExtensionMesh\Shopware\Core\Content\RepositoryRelease\RepositoryReleaseDefinition;
 use ExtensionMesh\Shopware\Core\Content\RepositoryRelease\RepositoryReleaseEntity;
@@ -67,6 +70,7 @@ final class EntityDefinitionTest extends TestCase
         yield 'published release' => [PublishedReleaseDefinition::class, PublishedReleaseEntity::class, PublishedReleaseCollection::class];
         yield 'registry source' => [RegistrySourceDefinition::class, RegistrySourceEntity::class, RegistrySourceCollection::class];
         yield 'repository connection' => [RepositoryConnectionDefinition::class, RepositoryConnectionEntity::class, RepositoryConnectionCollection::class];
+        yield 'repository credential' => [RepositoryCredentialDefinition::class, RepositoryCredentialEntity::class, RepositoryCredentialCollection::class];
         yield 'repository release' => [RepositoryReleaseDefinition::class, RepositoryReleaseEntity::class, RepositoryReleaseCollection::class];
     }
 }

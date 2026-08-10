@@ -31,6 +31,7 @@ final class ExtensionMesh extends Plugin
             'extension_mesh_extension_ownership',
             'extension_mesh_product',
             'extension_mesh_repository_connection',
+            'extension_mesh_repository_credential',
             'extension_mesh_registry_source',
         ] as $table) {
             $connection->executeStatement(\sprintf('DROP TABLE IF EXISTS `%s`', $table));

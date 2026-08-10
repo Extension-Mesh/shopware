@@ -2,6 +2,7 @@
 
 namespace ExtensionMesh\Shopware\Core\Content\RepositoryConnection;
 
+use ExtensionMesh\Shopware\Core\Content\RepositoryCredential\RepositoryCredentialDefinition;
 use ExtensionMesh\Shopware\Core\Content\RepositoryRelease\RepositoryReleaseDefinition;
 use Shopware\Core\Content\Product\ProductDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
@@ -9,7 +10,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Field\BoolField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\CreatedAtField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\DateTimeField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\FkField;
-use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\ApiAware;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\PrimaryKey;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\Required;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\IdField;
@@ -50,8 +50,7 @@ final class RepositoryConnectionDefinition extends EntityDefinition
             new StringField('web_url', 'webUrl', 512),
             new StringField('default_branch', 'defaultBranch'),
             (new BoolField('repository_private', 'repositoryPrivate'))->addFlags(new Required()),
-            (new LongTextField('credential_ciphertext', 'credentialCiphertext'))->removeFlag(ApiAware::class),
-            new StringField('credential_fingerprint', 'credentialFingerprint', 16),
+            new FkField('credential_id', 'credentialId', RepositoryCredentialDefinition::class),
             new FkField('product_id', 'productId', ProductDefinition::class),
             new ReferenceVersionField(ProductDefinition::class),
             new StringField('technical_name', 'technicalName', 128),
@@ -64,6 +63,11 @@ final class RepositoryConnectionDefinition extends EntityDefinition
             new LongTextField('last_error', 'lastError'),
             new CreatedAtField(),
             new UpdatedAtField(),
+            new ManyToOneAssociationField(
+                'credential',
+                'credential_id',
+                RepositoryCredentialDefinition::class
+            ),
             new ManyToOneAssociationField('product', 'product_id', ProductDefinition::class),
             new OneToManyAssociationField('releases', RepositoryReleaseDefinition::class, 'connection_id'),
         ]);

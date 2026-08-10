@@ -72,6 +72,31 @@ class ExtensionMeshApiService extends ApiService {
             .then((response) => response.data.data);
     }
 
+    getRepositoryCredentials() {
+        return this.httpClient
+            .get('_action/extension-mesh/repositories/credentials', {
+                headers: this.getBasicHeaders(),
+            })
+            .then((response) => response.data.data);
+    }
+
+    updateRepositoryCredential(id, accessToken) {
+        return this.httpClient
+            .put(
+                `_action/extension-mesh/repositories/credentials/${id}`,
+                { accessToken },
+                { headers: this.getBasicHeaders() },
+            )
+            .then((response) => response.data.data);
+    }
+
+    deleteRepositoryCredential(id) {
+        return this.httpClient.delete(
+            `_action/extension-mesh/repositories/credentials/${id}`,
+            { headers: this.getBasicHeaders() },
+        );
+    }
+
     connectSellerRepository(payload) {
         return this.httpClient
             .post(
@@ -92,11 +117,11 @@ class ExtensionMeshApiService extends ApiService {
             .then((response) => response.data.data);
     }
 
-    updateSellerRepositoryCredential(id, accessToken) {
+    updateSellerRepositoryCredential(id, accessToken, credentialId = null) {
         return this.httpClient
             .put(
                 `_action/extension-mesh/repositories/${id}/credential`,
-                { accessToken },
+                { accessToken, credentialId: credentialId || null },
                 { headers: this.getBasicHeaders() },
             )
             .then((response) => response.data.data);

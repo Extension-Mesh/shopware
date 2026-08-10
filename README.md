@@ -90,8 +90,11 @@ Adding a newer ZIP to the same product publishes an update.
 ## Connect a GitHub repository
 
 The **My Repositories** tab can connect public repositories without
-credentials. Private repositories require a fine-grained GitHub token limited
-to the selected repository with read-only **Contents** permission.
+credentials. Private repositories require a fine-grained GitHub token with
+read-only **Contents** permission. Saved tokens can be selected again when they
+cover multiple repositories on the same GitHub or GitHub Enterprise origin.
+They can be rotated centrally for every linked repository or deleted without
+removing the repository connections.
 
 Stable GitHub Release assets can be linked to an existing product or imported
 into a new inactive draft product. Repository synchronization runs
