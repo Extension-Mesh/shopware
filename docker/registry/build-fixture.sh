@@ -18,6 +18,7 @@ rm -f \
     "${archive}" \
     "${baseline_archive}" \
     "${public_dir}/registry.json" \
+    "${public_dir}/registry-v1.json" \
     "${public_dir}/tampered-registry.json" \
     "${public_dir}/invalid-registry.json" \
     "${public_dir}/github-repository.json" \
@@ -58,6 +59,8 @@ sed \
     -e "s/__SHA256_1_1_0__/${digest}/g" \
     -e "s/__SHA256_1_0_0__/${baseline_digest}/g" \
     "${script_dir}/registry.template.json" > "${public_dir}/registry.json"
+jq '.extensions[].releases |= map(select(.version == "1.0.0"))' \
+    "${public_dir}/registry.json" > "${public_dir}/registry-v1.json"
 sed -E \
     's/"sha256": "[a-f0-9]{64}"/"sha256": "0000000000000000000000000000000000000000000000000000000000000000"/g' \
     "${public_dir}/registry.json" > "${public_dir}/tampered-registry.json"

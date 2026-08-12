@@ -37,4 +37,9 @@ final class ExtensionOwnershipRepository
             'preparedAt' => new \DateTimeImmutable(),
         ]], $context);
     }
+
+    public function remove(string $technicalName, Context $context): void
+    {
+        $this->repository->delete([['technicalName' => $technicalName]], $context);
+    }
 }

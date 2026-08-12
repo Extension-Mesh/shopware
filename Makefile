@@ -34,6 +34,7 @@ battle-test:
 	docker compose exec -T buyer bin/console cache:clear --no-ansi
 	docker compose exec -T seller bin/console cache:clear --no-ansi
 	sh ./docker/test-interactions.sh
+	sh ./docker/test-cli-automation.sh
 	sh ./docker/test-paid-entitlements.sh
 	sh ./docker/test-repository-onboarding.sh
 

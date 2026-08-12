@@ -10,7 +10,7 @@ use ExtensionMesh\Shopware\Infrastructure\Persistence\RegistrySourceRepository;
 use ExtensionMesh\Shopware\Infrastructure\Security\CredentialCipher;
 use Shopware\Core\Framework\Context;
 
-final class CatalogService
+final class CatalogService implements CatalogManager
 {
     private const CACHE_TTL_SECONDS = 900;
 
@@ -42,6 +42,32 @@ final class CatalogService
         );
     }
 
+    /** @return array{id: string, created: bool, credentialUpdated: bool} */
+    public function addSourceIdempotently(string $inputUrl, ?string $accessToken, Context $context): array
+    {
+        $normalizedUrl = $this->urlNormalizer->normalize($inputUrl);
+        $normalizedCredential = $this->normalizeCredential($accessToken);
+        $existing = $this->sources->findByNormalizedUrl($normalizedUrl, $context);
+
+        if ($existing === null) {
+            return [
+                'id' => $this->addSource($inputUrl, $normalizedCredential, $context),
+                'created' => true,
+                'credentialUpdated' => false,
+            ];
+        }
+
+        if ($normalizedCredential !== null) {
+            $this->updateCredential($existing['id'], $normalizedCredential, $context);
+        }
+
+        return [
+            'id' => $existing['id'],
+            'created' => false,
+            'credentialUpdated' => $normalizedCredential !== null,
+        ];
+    }
+
     public function updateCredential(string $sourceId, ?string $accessToken, Context $context): void
     {
         $source = $this->sources->get($sourceId, $context);
@@ -58,8 +84,12 @@ final class CatalogService
         );
     }
 
-    public function refreshAll(Context $context): void
+    /**
+     * @return list<array{id: string, url: string, label: ?string, success: bool, error: ?string}>
+     */
+    public function refreshAll(Context $context): array
     {
+        $results = [];
         foreach ($this->sources->all($context) as $source) {
             if (!$source['enabled']) {
                 continue;
@@ -67,10 +97,26 @@ final class CatalogService
 
             try {
                 $this->refreshSource($source, $context);
+                $results[] = [
+                    'id' => $source['id'],
+                    'url' => $source['normalizedUrl'],
+                    'label' => $source['label'],
+                    'success' => true,
+                    'error' => null,
+                ];
             } catch (ExtensionMeshException $exception) {
                 $this->sources->recordError($source['id'], $exception->getMessage(), $context);
+                $results[] = [
+                    'id' => $source['id'],
+                    'url' => $source['normalizedUrl'],
+                    'label' => $source['label'],
+                    'success' => false,
+                    'error' => $exception->getMessage(),
+                ];
             }
         }
+
+        return $results;
     }
 
     /**
@@ -79,8 +125,13 @@ final class CatalogService
      *     warnings: list<array{registryId: string, message: string}>
      * }
      */
-    public function catalog(string $shopwareVersion, string $phpVersion, string $locale, Context $context): array
-    {
+    public function catalog(
+        string $shopwareVersion,
+        string $phpVersion,
+        string $locale,
+        Context $context,
+        bool $refreshStale = true
+    ): array {
         $extensions = [];
         $warnings = [];
         $ownership = $this->ownership->all($context);
@@ -91,7 +142,7 @@ final class CatalogService
             }
 
             try {
-                $registry = $this->loadSource($source, $context);
+                $registry = $this->loadSource($source, $context, $refreshStale);
             } catch (ExtensionMeshException $exception) {
                 $warnings[] = ['registryId' => $source['id'], 'message' => $exception->getMessage()];
                 continue;
@@ -110,6 +161,7 @@ final class CatalogService
                 $entry = $this->toAdministrationEntry(
                     $source['id'],
                     $registry['name'],
+                    $source['normalizedUrl'],
                     $extension,
                     $release,
                     $locale,
@@ -152,10 +204,16 @@ final class CatalogService
      *     changelogUrl: ?string
      * }
      */
-    public function release(string $registryId, string $technicalName, string $shopwareVersion, string $phpVersion, Context $context): array
-    {
+    public function release(
+        string $registryId,
+        string $technicalName,
+        string $shopwareVersion,
+        string $phpVersion,
+        Context $context,
+        bool $refreshStale = true
+    ): array {
         $source = $this->sources->get($registryId, $context);
-        $registry = $this->loadSource($source, $context);
+        $registry = $this->loadSource($source, $context, $refreshStale);
 
         foreach ($registry['extensions'] as $extension) {
             if ($extension['name'] !== $technicalName) {
@@ -199,12 +257,20 @@ final class CatalogService
         string $technicalName,
         string $shopwareVersion,
         string $phpVersion,
-        Context $context
+        Context $context,
+        bool $refreshStale = true
     ): array {
         $source = $this->sources->get($registryId, $context);
 
         return [
-            'release' => $this->release($registryId, $technicalName, $shopwareVersion, $phpVersion, $context),
+            'release' => $this->release(
+                $registryId,
+                $technicalName,
+                $shopwareVersion,
+                $phpVersion,
+                $context,
+                $refreshStale
+            ),
             'accessToken' => $this->credentialCipher->decrypt($source['credentialCiphertext']),
             'credentialOrigin' => $this->origin($source['normalizedUrl']),
             'registryUrl' => $source['normalizedUrl'],
@@ -249,9 +315,9 @@ final class CatalogService
      *     }>
      * }
      */
-    private function loadSource(array $source, Context $context): array
+    private function loadSource(array $source, Context $context, bool $refreshStale = true): array
     {
-        if ($this->isStale($source['lastRefreshedAt']) || $source['cachedRegistry'] === null) {
+        if ($refreshStale && ($this->isStale($source['lastRefreshedAt']) || $source['cachedRegistry'] === null)) {
             try {
                 return $this->refreshSource($source, $context);
             } catch (ExtensionMeshException $exception) {
@@ -260,6 +326,10 @@ final class CatalogService
                     throw $exception;
                 }
             }
+        }
+
+        if ($source['cachedRegistry'] === null) {
+            throw ExtensionMeshException::registryUnavailable('no cached registry is available.');
         }
 
         return $this->parser->parse($source['cachedRegistry']);
@@ -371,6 +441,7 @@ final class CatalogService
     private function toAdministrationEntry(
         string $registryId,
         string $registryName,
+        string $registryUrl,
         array $extension,
         array $release,
         string $locale,
@@ -400,6 +471,7 @@ final class CatalogService
             'extensionMesh' => [
                 'registryId' => $registryId,
                 'registryName' => $registryName,
+                'registryUrl' => $registryUrl,
                 'manufacturer' => $extension['manufacturer'],
                 'license' => $extension['license'],
                 'homepage' => $extension['homepage'],

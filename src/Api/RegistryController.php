@@ -48,9 +48,12 @@ final class RegistryController extends AbstractController
                 throw ExtensionMeshException::invalidCredential('it must be a string.');
             }
 
-            $id = $this->catalog->addSource($url, $accessToken, $context);
+            $result = $this->catalog->addSourceIdempotently($url, $accessToken, $context);
 
-            return new JsonResponse(['id' => $id], Response::HTTP_CREATED);
+            return new JsonResponse(
+                ['id' => $result['id'], 'created' => $result['created']],
+                $result['created'] ? Response::HTTP_CREATED : Response::HTTP_OK
+            );
         } catch (ExtensionMeshException|\JsonException $exception) {
             return $this->error($exception->getMessage(), Response::HTTP_BAD_REQUEST);
         }

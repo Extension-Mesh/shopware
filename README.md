@@ -21,6 +21,7 @@ lifecycle for installation and updates.
 - Customer-scoped access tokens for restricted extensions
 - Paginated customer-account license and release downloads
 - Encrypted registry and repository credentials
+- Non-interactive registry, refresh and managed-plugin synchronization commands
 
 ## Installation
 
@@ -73,6 +74,64 @@ HTTP `429` with a `Retry-After` header.
 
 Credentials are encrypted with the installation's `APP_SECRET`. They are not
 returned through the Administration API.
+
+## Unattended and server operation
+
+Registry sources can be configured without an interactive prompt. The optional
+token is validated through the same safe registry client as the Administration,
+encrypted at rest, and never included in command output:
+
+```bash
+bin/console extension-mesh:registry:add https://example.com/registry \
+    --token="$EXTENSION_MESH_TOKEN"
+bin/console extension-mesh:refresh
+```
+
+Adding the same normalized registry URL again is idempotent. It leaves the
+existing source unchanged unless `--token` is supplied, in which case the
+credential and cached registry are validated and updated.
+
+Without lifecycle flags, `sync` reports the desired state. Use the flags to
+apply selected changes:
+
+```bash
+bin/console extension-mesh:sync
+bin/console extension-mesh:sync --install --update --activate
+bin/console extension-mesh:sync --no-refresh --install --update --activate
+```
+
+Only plugins tracked as ExtensionMesh-managed are updated, activated, or
+pruned. A locally installed plugin with the same technical name is reported as
+unmanaged and is not claimed automatically. New installations become managed
+after their validated artifact is prepared.
+
+Dry-run uses only the cached catalog so it makes no persistent changes,
+including registry cache writes and artifact downloads. Run an explicit
+refresh first when automation needs a current network view:
+
+```bash
+bin/console extension-mesh:refresh
+bin/console extension-mesh:sync --dry-run
+bin/console extension-mesh:sync --dry-run --json
+bin/console extension-mesh:sync --install --update --activate --dry-run
+bin/console extension-mesh:sync --install --update --activate --dry-run --json
+```
+
+`--json` writes one stable JSON document to stdout and returns a non-zero exit
+status for refresh, catalog, validation, or lifecycle failures. The output
+contains `success`, per-extension `actions`, a count `summary`, and `errors`.
+
+Pruning is destructive and strictly opt-in:
+
+```bash
+bin/console extension-mesh:sync --prune
+bin/console extension-mesh:sync --prune --dry-run
+```
+
+It only uninstalls locally installed plugins recorded as ExtensionMesh-owned
+when they are no longer available from their owning registry. Shopware's
+normal uninstall lifecycle is used with user data retained; plugin files and
+custom cleanup are not deleted by ExtensionMesh.
 
 ## Publish from a seller installation
 

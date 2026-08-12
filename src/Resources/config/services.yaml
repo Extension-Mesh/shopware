@@ -140,6 +140,35 @@ services:
         arguments:
             $pluginManagementService: '@Shopware\Core\Framework\Plugin\PluginManagementService'
 
+    ExtensionMesh\Shopware\Service\CatalogManager:
+        alias: ExtensionMesh\Shopware\Service\CatalogService
+
+    ExtensionMesh\Shopware\Service\Sync\ExtensionOperator:
+        alias: ExtensionMesh\Shopware\Service\Sync\ShopwareExtensionOperator
+
+    ExtensionMesh\Shopware\Service\Sync\LifecycleRunner:
+        alias: ExtensionMesh\Shopware\Service\Sync\CliLifecycleRunner
+
+    ExtensionMesh\Shopware\Service\Sync\SyncRunner:
+        alias: ExtensionMesh\Shopware\Service\Sync\SyncService
+
+    ExtensionMesh\Shopware\Service\Sync\ShopwareExtensionOperator:
+        arguments:
+            $plugins: '@plugin.repository'
+            $shopwareVersion: '%kernel.shopware_version%'
+
+    ExtensionMesh\Shopware\Service\Sync\CliLifecycleRunner:
+        arguments:
+            $projectDir: '%kernel.project_dir%'
+
+    ExtensionMesh\Shopware\Service\Sync\NativePluginLifecycle:
+        arguments:
+            $plugins: '@plugin.repository'
+
+    ExtensionMesh\Shopware\Service\Sync\SyncService:
+        arguments:
+            $shopwareVersion: '%kernel.shopware_version%'
+
     ExtensionMesh\Shopware\Repository\GithubRepositoryProvider:
         tags:
             - { name: extension_mesh.repository_provider }

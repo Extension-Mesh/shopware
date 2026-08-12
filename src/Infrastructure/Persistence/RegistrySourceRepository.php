@@ -72,6 +72,30 @@ final class RegistrySourceRepository
         return $this->hydrate($entity);
     }
 
+    /**
+     * @return array{
+     *     id: string,
+     *     url: string,
+     *     normalizedUrl: string,
+     *     label: ?string,
+     *     enabled: bool,
+     *     credentialCiphertext: ?string,
+     *     credentialFingerprint: ?string,
+     *     cachedRegistry: ?string,
+     *     lastRefreshedAt: ?string,
+     *     lastError: ?string
+     * }|null
+     */
+    public function findByNormalizedUrl(string $normalizedUrl, Context $context): ?array
+    {
+        $criteria = (new Criteria())
+            ->addFilter(new EqualsFilter('normalizedUrl', $normalizedUrl))
+            ->setLimit(1);
+        $entity = $this->repository->search($criteria, $context)->first();
+
+        return $entity instanceof RegistrySourceEntity ? $this->hydrate($entity) : null;
+    }
+
     public function add(
         string $url,
         string $normalizedUrl,
