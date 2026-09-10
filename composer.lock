@@ -12009,11 +12009,11 @@
         },
         {
             "name": "phpstan/phpstan",
-            "version": "2.2.7",
+            "version": "2.2.13",
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/phpstan/phpstan/zipball/692db47b9dddb0487934e5236e77d48594aef921",
-                "reference": "692db47b9dddb0487934e5236e77d48594aef921",
+                "url": "https://api.github.com/repos/phpstan/phpstan/zipball/9ba9ac76ee9c5cf5b56d58eb5deec6315b7a0260",
+                "reference": "9ba9ac76ee9c5cf5b56d58eb5deec6315b7a0260",
                 "shasum": ""
             },
             "require": {
@@ -12069,7 +12069,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-07-29T17:39:32+00:00"
+            "time": "2026-09-03T20:38:19+00:00"
         },
         {
             "name": "phpunit/php-code-coverage",
@@ -13500,16 +13500,16 @@
         },
         {
             "name": "shopwarelabs/phpstan-shopware",
-            "version": "0.2.3",
+            "version": "0.2.4",
             "source": {
                 "type": "git",
                 "url": "https://github.com/shopware/phpstan-shopware.git",
-                "reference": "8b7fbaccf895b26646eb264e4b87bd8987ab649f"
+                "reference": "6b568464ed67f18d7f8476b0d479e41070fa76fa"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/shopware/phpstan-shopware/zipball/8b7fbaccf895b26646eb264e4b87bd8987ab649f",
-                "reference": "8b7fbaccf895b26646eb264e4b87bd8987ab649f",
+                "url": "https://api.github.com/repos/shopware/phpstan-shopware/zipball/6b568464ed67f18d7f8476b0d479e41070fa76fa",
+                "reference": "6b568464ed67f18d7f8476b0d479e41070fa76fa",
                 "shasum": ""
             },
             "require": {
@@ -13543,9 +13543,9 @@
             "description": "PhpStan Rules for Shopware",
             "support": {
                 "issues": "https://github.com/shopware/phpstan-shopware/issues",
-                "source": "https://github.com/shopware/phpstan-shopware/tree/0.2.3"
+                "source": "https://github.com/shopware/phpstan-shopware/tree/0.2.4"
             },
-            "time": "2026-07-20T11:02:36+00:00"
+            "time": "2026-09-02T12:21:13+00:00"
         },
         {
             "name": "staabm/side-effects-detector",
@@ -13665,5 +13665,5 @@
     "platform-overrides": {
         "php": "8.2.0"
     },
-    "plugin-api-version": "2.6.0"
+    "plugin-api-version": "2.9.0"
 }
