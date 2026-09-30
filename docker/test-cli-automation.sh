@@ -5,10 +5,6 @@ buyer_api="http://127.0.0.1:${BUYER_HTTP_PORT:-8081}/api"
 public_dir="$(CDPATH= cd -- "$(dirname -- "$0")/registry/public" && pwd)"
 registry_current="${public_dir}/registry.json"
 credential="cli-automation-secret"
-temporary_dir=$(mktemp -d)
-
-jq '.extensions[].releases |= map(select(.version == "1.0.0"))' \
-    "${registry_current}" > "${temporary_dir}/registry-v1.json"
 
 write_registry_v1() {
     docker compose exec -T --user root buyer sh -c \
@@ -25,7 +21,6 @@ restore_registry() {
     write_registry_v1 "${temporary_dir}/registry-v1.json"
     rm -rf "${temporary_dir}"
 }
-trap restore_registry EXIT
 
 token=$(curl -fsS \
     -X POST "${buyer_api}/oauth/token" \
@@ -33,18 +28,18 @@ token=$(curl -fsS \
     --data '{"client_id":"administration","grant_type":"password","scopes":"write","username":"admin","password":"shopware"}' \
     | jq -er '.access_token')
 
-curl -fsS -X POST "${buyer_api}/search/extension-mesh-registry-source" \
+sources_json=$(curl -fsS -X POST "${buyer_api}/search/extension-mesh-registry-source" \
     -H "Authorization: Bearer ${token}" \
     -H 'Content-Type: application/json' \
-    --data '{"page":1,"limit":500}' \
-    | jq -r '.data[].id' \
-    | while IFS= read -r source_id; do
-        curl -fsS \
-            -X DELETE \
-            "${buyer_api}/_action/extension-mesh/registries/${source_id}" \
-            -H "Authorization: Bearer ${token}" \
-            >/dev/null
-    done
+    --data '{"page":1,"limit":500}')
+source_ids=$(printf '%s' "${sources_json}" | jq -r '.data[].id')
+for source_id in ${source_ids}; do
+    curl -fsS \
+        -X DELETE \
+        "${buyer_api}/_action/extension-mesh/registries/${source_id}" \
+        -H "Authorization: Bearer ${token}" \
+        >/dev/null
+done
 
 installed_json=$(curl -fsS "${buyer_api}/_action/extension/installed" -H "Authorization: Bearer ${token}")
 if printf '%s' "${installed_json}" | jq -e '.[] | select(.name == "AcmeDemoPlugin" and .installedAt != null)' >/dev/null; then
@@ -64,7 +59,11 @@ if printf '%s' "${installed_json}" | jq -e '.[] | select(.name == "AcmeDemoPlugi
         >/dev/null
 fi
 
-restore_registry
+temporary_dir=$(mktemp -d)
+jq '.extensions[].releases |= map(select(.version == "1.0.0"))' \
+    "${registry_current}" > "${temporary_dir}/registry-v1.json"
+trap restore_registry EXIT
+write_registry_v1 "${temporary_dir}/registry-v1.json"
 docker compose exec -T buyer bin/console cache:clear --no-ansi >/dev/null
 docker compose exec -T buyer bin/console extension-mesh:registry:add \
     http://registry/registry-v1.json --no-ansi >/dev/null
