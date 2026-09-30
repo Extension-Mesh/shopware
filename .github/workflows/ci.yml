@@ -44,6 +44,7 @@ jobs:
         run: |
           docker compose config --quiet
           sh -n docker/registry/build-fixture.sh docker/wait-for-dockware.sh \
-            docker/test-interactions.sh docker/test-paid-entitlements.sh \
+            docker/test-interactions.sh docker/test-cli-automation.sh \
+            docker/test-paid-entitlements.sh \
             docker/test-repository-onboarding.sh
           git diff --check

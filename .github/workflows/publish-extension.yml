@@ -136,7 +136,8 @@ jobs:
           find src -name '*.php' -print0 \
             | xargs -0 -n1 php -l
           sh -n docker/registry/build-fixture.sh docker/wait-for-dockware.sh \
-            docker/test-interactions.sh docker/test-paid-entitlements.sh \
+            docker/test-interactions.sh docker/test-cli-automation.sh \
+            docker/test-paid-entitlements.sh \
             docker/test-repository-onboarding.sh
 
       - name: Build and validate extension ZIP

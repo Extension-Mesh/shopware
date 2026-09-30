@@ -30,9 +30,6 @@ on:
         required: false
         default: dockware/shopware:6.7.12.2
         type: string
-  schedule:
-    - cron: "17 2 * * *"
-
 permissions:
   contents: read
 

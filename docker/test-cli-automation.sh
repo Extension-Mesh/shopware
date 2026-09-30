@@ -3,9 +3,18 @@ set -eu
 
 buyer_api="http://127.0.0.1:${BUYER_HTTP_PORT:-8081}/api"
 public_dir="$(CDPATH= cd -- "$(dirname -- "$0")/registry/public" && pwd)"
-registry_v1="${public_dir}/registry-v1.json"
 registry_current="${public_dir}/registry.json"
 credential="cli-automation-secret"
+temporary_dir=$(mktemp -d)
+
+jq '.extensions[].releases |= map(select(.version == "1.0.0"))' \
+    "${registry_current}" > "${temporary_dir}/registry-v1.json"
+
+write_registry_v1() {
+    docker compose exec -T --user root buyer sh -c \
+        'cat > /var/www/html/custom/plugins/ExtensionMesh/docker/registry/public/registry-v1.json' \
+        < "$1"
+}
 
 fail() {
     echo "CLI automation test failed: $1" >&2
@@ -13,8 +22,8 @@ fail() {
 }
 
 restore_registry() {
-    jq '.extensions[].releases |= map(select(.version == "1.0.0"))' \
-        "${registry_current}" > "${registry_v1}"
+    write_registry_v1 "${temporary_dir}/registry-v1.json"
+    rm -rf "${temporary_dir}"
 }
 trap restore_registry EXIT
 
@@ -97,7 +106,7 @@ docker compose exec -T buyer bin/console plugin:list --format=json --no-ansi \
     )' >/dev/null \
     || fail 'sync did not install and activate version 1.0.0'
 
-cp "${registry_current}" "${registry_v1}"
+write_registry_v1 "${registry_current}"
 docker compose exec -T buyer bin/console extension-mesh:refresh --no-ansi >/dev/null
 update_plan=$(docker compose exec -T buyer bin/console extension-mesh:sync \
     --update --dry-run --json --no-ansi)
