@@ -50,7 +50,7 @@ jobs:
       contents: write
       id-token: write
       attestations: write
-    uses: Extension-Mesh/shopware-publisher/.github/workflows/publish.yml@v0.1.0-alpha.1
+    uses: Extension-Mesh/shopware-publisher/.github/workflows/publish.yml@v1.0.0
 ```
 
 Commit the workflow together with a new version in `composer.json`. The
@@ -80,7 +80,7 @@ steps:
       fetch-depth: 0
 
   - name: Publish with ExtensionMesh metadata
-    uses: Extension-Mesh/shopware-publisher@v0.1.0-alpha.1
+    uses: Extension-Mesh/shopware-publisher@v1.0.0
     env:
       EXTENSION_MESH_TAG: ${{ github.ref_name }}
 ```
@@ -98,7 +98,7 @@ instead of rebuilding it:
 
 ```yaml
 - name: Publish the verified archive
-  uses: Extension-Mesh/shopware-publisher@1355c834bb904a01205ff46cc16a81461c3ce4b6
+  uses: Extension-Mesh/shopware-publisher@v1.0.0
   with:
     source-archive: ${{ runner.temp }}/verified/MyPlugin.zip
   env:
@@ -134,7 +134,10 @@ repository URL therefore remains stable while the published version changes.
 - Tags and release versions use semantic versions.
 - The generated registry channel represents the most recently published
   release, including prereleases.
-- The action and generated registry format are versioned separately from the
-  Shopware connector and may still change.
+- Publisher `v1.0.0` generates registry documents with `schemaVersion: 1`.
+  Connector `1.0.0` accepts exactly this schema version. A future incompatible
+  registry format requires a new schema version and explicit connector support;
+  existing version 1 documents remain the compatibility baseline for the 1.x
+  connector series.
 - Test the complete install and update path in an isolated Shopware 6.7
   installation before wider use.

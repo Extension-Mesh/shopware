@@ -227,7 +227,7 @@ jobs:
       - name: Build and publish the compatible package
         env:
           EXTENSION_MESH_TAG: ${{ needs.release-context.outputs.tag }}
-        uses: Extension-Mesh/shopware-publisher@1355c834bb904a01205ff46cc16a81461c3ce4b6
+        uses: Extension-Mesh/shopware-publisher@v1.0.0
         with:
           source-archive: ${{ runner.temp }}/verified-extension/ExtensionMesh-${{ github.sha }}.zip
 

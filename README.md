@@ -4,9 +4,8 @@ ExtensionMesh is an open-source connector for extension registries in Shopware
 6.7. It adds registry sources to the Administration and uses the native plugin
 lifecycle for installation and updates.
 
-> **Project status:** Public beta. Version `0.1.0-beta.1` is available for
-> broader evaluation on Shopware 6.7. Review the current boundaries before
-> using it in production.
+> **Project status:** Version `1.0.0` targets Shopware 6.7. See the release
+> assets and compatibility notes before installing or upgrading.
 
 ## Current capabilities
 
