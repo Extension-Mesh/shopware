@@ -9,6 +9,19 @@
         <h1>{{ extensionMeshLicense.name }}</h1>
         <p class="text-body-secondary">{{ extensionMeshLicense.productNumber }}</p>
 
+        <section class="mb-4">
+            <h2 class="h5">{{ 'extensionMesh.licenses.zipInstallTitle'|trans|sw_sanitize }}</h2>
+            <ol class="ps-3">
+                <li>{{ 'extensionMesh.licenses.selectStep'|trans|sw_sanitize }}</li>
+                <li>{{ 'extensionMesh.licenses.downloadStep'|trans|sw_sanitize }}</li>
+                <li>{{ 'extensionMesh.licenses.installStep'|trans|sw_sanitize }}</li>
+            </ol>
+            <p>{{ 'extensionMesh.licenses.zipUpdates'|trans|sw_sanitize }}</p>
+            <a href="{{ path('frontend.extension_mesh.account') }}">
+                {{ 'extensionMesh.installation.meshTitle'|trans|sw_sanitize }}
+            </a>
+        </section>
+
         <form
             class="card card-body mb-4"
             method="get"

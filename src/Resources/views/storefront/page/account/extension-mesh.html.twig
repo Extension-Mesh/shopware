@@ -3,11 +3,26 @@
 {% block page_account_main_content %}
     <div class="account-welcome">
         <h1>{{ 'extensionMesh.account.title'|trans|sw_sanitize }}</h1>
-        <p>{{ 'extensionMesh.account.explanation'|trans|sw_sanitize }}</p>
-
         {% if extensionMeshToken %}
-            <div class="card">
+            <p>{{ 'extensionMesh.account.explanation'|trans|sw_sanitize }}</p>
+
+            <section class="mb-4">
+                <h2 class="h5">{{ 'extensionMesh.installation.connectShop'|trans|sw_sanitize }}</h2>
+                <ol class="ps-3">
+                    <li class="mb-2">
+                        {{ 'extensionMesh.account.installStep'|trans|sw_sanitize }}
+                        <a href="https://www.extension-mesh.dev/docs/for-users/">
+                            {{ 'extensionMesh.account.installGuide'|trans|sw_sanitize }}
+                        </a>
+                    </li>
+                    <li class="mb-2">{{ 'extensionMesh.account.connectStep'|trans|sw_sanitize }}</li>
+                    <li>{{ 'extensionMesh.account.manageStep'|trans|sw_sanitize }}</li>
+                </ol>
+            </section>
+
+            <div class="card mb-4">
                 <div class="card-body">
+                    <h2 class="h5">{{ 'extensionMesh.account.credentialsTitle'|trans|sw_sanitize }}</h2>
                     <label class="form-label" for="extension-mesh-registry-url">
                         {{ 'extensionMesh.account.registryUrl'|trans|sw_sanitize }}
                     </label>
@@ -90,5 +105,11 @@
                 {{ 'extensionMesh.account.noEntitlements'|trans|sw_sanitize }}
             </div>
         {% endif %}
+
+        <p>
+            <a href="{{ path('frontend.extension_mesh.licenses') }}">
+                {{ 'extensionMesh.account.zipAlternative'|trans|sw_sanitize }}
+            </a>
+        </p>
     </div>
 {% endblock %}

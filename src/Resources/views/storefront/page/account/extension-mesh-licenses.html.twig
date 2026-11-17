@@ -10,6 +10,34 @@
                 {{ 'extensionMesh.licenses.empty'|trans|sw_sanitize }}
             </div>
         {% else %}
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <section class="card h-100">
+                        <div class="card-body d-flex flex-column align-items-start">
+                            <h2 class="h5">{{ 'extensionMesh.installation.meshTitle'|trans|sw_sanitize }}</h2>
+                            <p>{{ 'extensionMesh.installation.meshDescription'|trans|sw_sanitize }}</p>
+                            <a class="btn btn-primary mt-auto" href="{{ path('frontend.extension_mesh.account') }}">
+                                {{ 'extensionMesh.installation.connectShop'|trans|sw_sanitize }}
+                            </a>
+                        </div>
+                    </section>
+                </div>
+                <div class="col-md-6">
+                    <section class="card h-100">
+                        <div class="card-body d-flex flex-column align-items-start">
+                            <h2 class="h5">{{ 'extensionMesh.installation.zipTitle'|trans|sw_sanitize }}</h2>
+                            <p>{{ 'extensionMesh.installation.zipDescription'|trans|sw_sanitize }}</p>
+                            <a class="btn btn-outline-primary mt-auto" href="#extension-mesh-extensions">
+                                {{ 'extensionMesh.installation.selectExtension'|trans|sw_sanitize }}
+                            </a>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <h2 id="extension-mesh-extensions" class="h5" tabindex="-1">
+                {{ 'extensionMesh.installation.selectExtension'|trans|sw_sanitize }}
+            </h2>
             <div class="list-group mb-4">
                 {% for license in extensionMeshLicenses.items %}
                     <a
