@@ -74,6 +74,16 @@ HTTP `429` with a `Retry-After` header.
 Credentials are encrypted with the installation's `APP_SECRET`. They are not
 returned through the Administration API.
 
+GitHub sources use a published ExtensionMesh registry when available. If that
+registry is missing, ExtensionMesh discovers built Shopware plugin ZIPs attached
+to stable GitHub Releases (the 100 most recent releases are inspected). It
+validates each ZIP, derives version and compatibility from its `composer.json`,
+and pins its SHA-256 checksum. Refreshing the source discovers new releases and
+reuses previously inspected assets. GitHub's automatic source archives and
+repositories with only tags or branches are insufficient; a built plugin ZIP
+must be attached to a stable release. Private repositories require a GitHub
+token with read-only **Contents** permission.
+
 ## Unattended and server operation
 
 Registry sources can be configured without an interactive prompt. The optional

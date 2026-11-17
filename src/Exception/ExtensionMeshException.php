@@ -14,9 +14,9 @@ final class ExtensionMeshException extends \RuntimeException
         return new self(\sprintf('Registry network target "%s" is not allowed.', $host));
     }
 
-    public static function registryUnavailable(string $message): self
+    public static function registryUnavailable(string $message, int $httpStatus = 0): self
     {
-        return new self('Registry could not be loaded: ' . $message);
+        return new self('Registry could not be loaded: ' . $message, $httpStatus);
     }
 
     public static function invalidRegistry(string $message): self

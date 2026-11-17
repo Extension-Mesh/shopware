@@ -4,7 +4,6 @@ namespace ExtensionMesh\Shopware\Service;
 
 use ExtensionMesh\Shopware\Exception\ExtensionMeshException;
 use ExtensionMesh\Shopware\Infrastructure\Http\RegistryUrlNormalizer;
-use ExtensionMesh\Shopware\Infrastructure\Http\SafeHttpClient;
 use ExtensionMesh\Shopware\Infrastructure\Persistence\ExtensionOwnershipRepository;
 use ExtensionMesh\Shopware\Infrastructure\Persistence\RegistrySourceRepository;
 use ExtensionMesh\Shopware\Infrastructure\Security\CredentialCipher;
@@ -17,7 +16,7 @@ final class CatalogService implements CatalogManager
     public function __construct(
         private readonly RegistrySourceRepository $sources,
         private readonly RegistryUrlNormalizer $urlNormalizer,
-        private readonly SafeHttpClient $httpClient,
+        private readonly RegistryLoader $registryLoader,
         private readonly RegistryParser $parser,
         private readonly CredentialCipher $credentialCipher,
         private readonly ExtensionOwnershipRepository $ownership
@@ -28,7 +27,7 @@ final class CatalogService implements CatalogManager
     {
         $normalizedUrl = $this->urlNormalizer->normalize($inputUrl);
         $accessToken = $this->normalizeCredential($accessToken);
-        $json = $this->httpClient->getRegistry($normalizedUrl, $accessToken);
+        $json = $this->registryLoader->load($normalizedUrl, $accessToken);
         $registry = $this->parser->parse($json);
 
         return $this->sources->add(
@@ -72,7 +71,7 @@ final class CatalogService implements CatalogManager
     {
         $source = $this->sources->get($sourceId, $context);
         $accessToken = $this->normalizeCredential($accessToken);
-        $json = $this->httpClient->getRegistry($source['normalizedUrl'], $accessToken);
+        $json = $this->registryLoader->load($source['normalizedUrl'], $accessToken, $source['cachedRegistry']);
         $registry = $this->parser->parse($json);
         $this->sources->updateCredential(
             $sourceId,
@@ -261,18 +260,19 @@ final class CatalogService implements CatalogManager
         bool $refreshStale = true
     ): array {
         $source = $this->sources->get($registryId, $context);
+        $release = $this->release(
+            $registryId,
+            $technicalName,
+            $shopwareVersion,
+            $phpVersion,
+            $context,
+            $refreshStale
+        );
 
         return [
-            'release' => $this->release(
-                $registryId,
-                $technicalName,
-                $shopwareVersion,
-                $phpVersion,
-                $context,
-                $refreshStale
-            ),
+            'release' => $release,
             'accessToken' => $this->credentialCipher->decrypt($source['credentialCiphertext']),
-            'credentialOrigin' => $this->origin($source['normalizedUrl']),
+            'credentialOrigin' => $this->registryLoader->credentialOrigin($source['normalizedUrl'], $release['downloadUrl']),
             'registryUrl' => $source['normalizedUrl'],
         ];
     }
@@ -370,9 +370,10 @@ final class CatalogService implements CatalogManager
      */
     private function refreshSource(array $source, Context $context): array
     {
-        $json = $this->httpClient->getRegistry(
+        $json = $this->registryLoader->load(
             $source['normalizedUrl'],
-            $this->credentialCipher->decrypt($source['credentialCiphertext'])
+            $this->credentialCipher->decrypt($source['credentialCiphertext']),
+            $source['cachedRegistry']
         );
         $registry = $this->parser->parse($json);
         $this->sources->updateCache($source['id'], $registry['name'], $json, $context);
@@ -402,17 +403,6 @@ final class CatalogService implements CatalogManager
         }
 
         return $credential;
-    }
-
-    private function origin(string $url): string
-    {
-        $parts = \parse_url($url);
-        if ($parts === false || !isset($parts['scheme'], $parts['host'])) {
-            throw ExtensionMeshException::invalidRegistryUrl('the normalized URL has no origin.');
-        }
-
-        return \strtolower($parts['scheme']) . '://' . \strtolower($parts['host'])
-            . (isset($parts['port']) ? ':' . $parts['port'] : '');
     }
 
     /**

@@ -303,10 +303,9 @@ final class GithubRepositoryProvider implements RepositoryProvider
 
     private function isAssetUrl(string $url, string $repository, string $apiBaseUrl): bool
     {
-        return \str_starts_with(
-            $url,
-            $this->repositoryUrl($repository, $apiBaseUrl) . '/releases/assets/'
-        );
+        $prefix = $this->repositoryUrl($repository, $apiBaseUrl) . '/releases/assets/';
+
+        return \strncasecmp($url, $prefix, \strlen($prefix)) === 0;
     }
 
     /**

@@ -82,7 +82,8 @@ final class SafeHttpClient
         return $this->downloadFile(
             $url,
             $accessToken === null ? [] : ['Authorization' => 'Bearer ' . $accessToken],
-            $credentialOrigin
+            $credentialOrigin,
+            'application/octet-stream'
         );
     }
 
@@ -196,7 +197,7 @@ final class SafeHttpClient
             }
 
             if (!\in_array($status, [301, 302, 303, 307, 308], true)) {
-                throw ExtensionMeshException::registryUnavailable(\sprintf('server returned HTTP %d.', $status));
+                throw ExtensionMeshException::registryUnavailable(\sprintf('server returned HTTP %d.', $status), $status);
             }
 
             $headers = $response->getHeaders(false);

@@ -125,6 +125,12 @@ The connector resolves this URL to the generated registry channel:
 https://raw.githubusercontent.com/owner/plugin-repository/extension-mesh-registry/extension-mesh-registry.json
 ```
 
+If this channel does not exist, the buyer connector falls back to built Shopware
+plugin ZIPs attached to stable GitHub Releases. A conventional repository with
+release ZIPs can therefore be added without adopting the publisher workflow.
+Automatic source ZIPs are not installable plugin artifacts. Existing registry
+channels take precedence over release discovery.
+
 Every successful release updates this document, including prereleases. The
 repository URL therefore remains stable while the published version changes.
 

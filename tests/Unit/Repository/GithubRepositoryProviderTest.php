@@ -200,4 +200,28 @@ final class GithubRepositoryProviderTest extends TestCase
         @\unlink(\sys_get_temp_dir() . \DIRECTORY_SEPARATOR . \basename($path));
         self::assertSame(2, $request);
     }
+
+    public function testReleaseAssetsAcceptTheCanonicalGithubRepositoryCasing(): void
+    {
+        $client = new MockHttpClient(new MockResponse((string) \json_encode([[
+            'id' => 10,
+            'tag_name' => '1.0.0',
+            'published_at' => '2026-07-28T12:00:00Z',
+            'draft' => false,
+            'prerelease' => false,
+            'assets' => [[
+                'id' => 100,
+                'name' => 'Plugin.zip',
+                'size' => 1234,
+                'url' => 'http://127.0.0.1/repos/Acme/Plugin/releases/assets/100',
+            ]],
+        ]], \JSON_THROW_ON_ERROR)));
+        $provider = new GithubRepositoryProvider(
+            new SafeHttpClient($client, new NetworkPolicy(true), new Filesystem())
+        );
+
+        $releases = $provider->releases('acme/plugin', 'http://127.0.0.1', '');
+        self::assertCount(1, $releases);
+        self::assertSame('http://127.0.0.1/repos/Acme/Plugin/releases/assets/100', $releases[0]['assets'][0]['apiUrl']);
+    }
 }

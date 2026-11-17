@@ -6,7 +6,7 @@
     },
     "registries": {
       "title": "Erweiterungsquellen",
-      "explanation": "Füge einen Registry-Endpunkt oder die URL eines öffentlichen GitHub-Repositories hinzu. Die Erweiterungen erscheinen in dieser bestehenden Liste.",
+      "explanation": "Füge einen Registry-Endpunkt oder die URL eines GitHub-Repositories mit fertigen Plugin-ZIPs in stabilen Releases hinzu. Die Erweiterungen erscheinen in dieser bestehenden Liste.",
       "addTitle": "Registry hinzufügen",
       "connectedTitle": "Verbundene Registries",
       "connectedHelp": "Erweiterungen aus diesen Quellen werden in die bestehende Apps-Liste eingebunden.",
@@ -14,7 +14,7 @@
       "urlLabel": "Registry- oder GitHub-URL",
       "urlPlaceholder": "https://github.com/anbieter/shopware-plugin",
       "accessTokenLabel": "Zugriffstoken (optional)",
-      "accessTokenHelp": "Wird mit dem APP_SECRET dieser Shopware-Installation verschlüsselt gespeichert und nur an den Registry-Ursprung gesendet.",
+      "accessTokenHelp": "Wird mit dem APP_SECRET dieser Shopware-Installation verschlüsselt gespeichert und nur an den jeweiligen Registry- oder GitHub-API-Ursprung gesendet.",
       "credentialStored": "Zugriffstoken gespeichert (Fingerabdruck {fingerprint})",
       "changeAccess": "Zugang ändern",
       "newAccessToken": "Neues Zugriffstoken",

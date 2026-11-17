@@ -6,7 +6,7 @@
     },
     "registries": {
       "title": "Extension registries",
-      "explanation": "Add a registry endpoint or paste a public GitHub repository URL. Its extensions appear in this existing list.",
+      "explanation": "Add a registry endpoint or a GitHub repository with built plugin ZIPs attached to stable releases. Its extensions appear in this existing list.",
       "addTitle": "Add registry",
       "connectedTitle": "Connected registries",
       "connectedHelp": "Extensions from these sources are merged into the existing Apps listing.",
@@ -14,7 +14,7 @@
       "urlLabel": "Registry or GitHub URL",
       "urlPlaceholder": "https://github.com/vendor/shopware-plugin",
       "accessTokenLabel": "Access token (optional)",
-      "accessTokenHelp": "Stored encrypted with this Shopware installation's APP_SECRET and sent only to the registry origin.",
+      "accessTokenHelp": "Stored encrypted with this Shopware installation's APP_SECRET and sent only to the respective registry or GitHub API origin.",
       "credentialStored": "Access token stored (fingerprint {fingerprint})",
       "changeAccess": "Change access",
       "newAccessToken": "Replacement access token",
